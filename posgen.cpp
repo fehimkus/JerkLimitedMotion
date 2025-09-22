@@ -1,17 +1,19 @@
 #include <random>
 #include <thread>
 #include "graph.h"
-#include "periodic.h"
+#include "periodic.h" // Assuming these are your utility headers
 #include "profiler.h"
 
 #define BufferSize 10000
 
+// Your global objects remain
 Graph graph;
 Profiler profiler;
 double prev_cycle_time = 0.0;
 static auto start_time = std::chrono::high_resolution_clock::now();
 
-std::mt19937 rng(std::random_device{}()); // random engine
+// Your random number generators remain
+std::mt19937 rng(std::random_device{}());
 std::uniform_real_distribution<double> posDist(-10.0, 10.0);
 std::uniform_int_distribution<int> velDist(5, 30);
 std::uniform_int_distribution<int> accDist(30, 100);
@@ -22,7 +24,7 @@ void *positionGenerator()
     double discreteTime{};
 
     discreteTime = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>
-        (std::chrono::system_clock::now() - profiler.begin).count()) * 1e-6f;
+        (std::chrono::high_resolution_clock::now() - profiler.begin).count()) * 1e-6f;
 
     double deltaTime{};
     deltaTime = discreteTime - prev_cycle_time;
@@ -199,36 +201,64 @@ void my_task()
         graph.dataPoints.erase(graph.dataPoints.begin());
 }
 
-// GLUT callbacks
-void displayCallback() { graph.display(); }
-void reshapeCallback(int w, int h) { graph.reshape(w, h); }
-void mouseCallback(int button, int state, int x, int y) { graph.mouse(button, state, x, y); }
-void keyboardCallback(unsigned char key, int x, int y) { graph.keyboard(key, x, y); }
-void idleCallback() { glutPostRedisplay(); }
 
-int main(int argc, char **argv)
+
+int main()
 {
-    // Initialize GLUT
-    glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB);
-    glutInitWindowSize(graph.winW, graph.winH);
-    glutCreateWindow("Live Graph");
+    // --- 1. Initialize GLFW ---
+    if (!glfwInit())
+    {
+        std::cerr << "Failed to initialize GLFW" << std::endl;
+        return -1;
+    }
 
-    glutDisplayFunc(displayCallback);
-    glutReshapeFunc(reshapeCallback);
-    glutMouseFunc(mouseCallback);
-    glutKeyboardFunc(keyboardCallback);
-    glutIdleFunc(idleCallback);
+    // --- 2. Create a Window ---
+    GLFWwindow *window = glfwCreateWindow(graph.winW, graph.winH, "Live Graph with GLFW", NULL, NULL);
+    if (!window)
+    {
+        std::cerr << "Failed to create GLFW window" << std::endl;
+        glfwTerminate();
+        return -1;
+    }
+    glfwMakeContextCurrent(window);
 
-    glClearColor(1, 1, 1, 1);
+    // --- 3. Link Graph object and set callbacks ---
+    glfwSetWindowUserPointer(window, &graph); // IMPORTANT: Associate Graph instance with window
+    glfwSetFramebufferSizeCallback(window, Graph::framebuffer_size_callback);
+    glfwSetMouseButtonCallback(window, Graph::mouse_button_callback);
+    glfwSetKeyCallback(window, Graph::key_callback);
+    glfwSetCharCallback(window, Graph::character_callback);
 
-    // Start your periodic task in a separate thread
+    // --- 4. Start your data generation thread (same as before) ---
     std::thread([=]()
                 {
-        update_period(1'000'000);
-        run_periodic(my_task); })
+                    // I'm assuming you have these functions defined elsewhere
+                    // update_period(1'000'000);
+                    // run_periodic(my_task);
+
+                    // A simple loop for demonstration if the above are not available
+                    while (true)
+                    {
+                        my_task();
+                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    }
+                })
         .detach();
 
-    glutMainLoop();
+    // --- 5. The Main Loop (replaces glutMainLoop) ---
+    while (!glfwWindowShouldClose(window))
+    {
+        // Render your graph
+        graph.display();
+
+        // Swap front and back buffers
+        glfwSwapBuffers(window);
+
+        // Poll for and process events
+        glfwPollEvents();
+    }
+
+    // --- 6. Cleanup ---
+    glfwTerminate();
     return 0;
 }

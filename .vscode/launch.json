@@ -1,0 +1,29 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug posgen",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/posgen",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "DISPLAY",
+                    "value": ":0"
+                }
+            ],
+            "externalConsole": true,
+            "MIMode": "lldb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for LLDB",
+                    "text": "settings set target.import-std-module true",
+                    "ignoreFailures": true
+                }
+            ]
+        }
+    ]
+}

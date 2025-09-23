@@ -232,17 +232,8 @@ int main()
     // --- 4. Start your data generation thread (same as before) ---
     std::thread([=]()
                 {
-                    // I'm assuming you have these functions defined elsewhere
-                    // update_period(1'000'000);
-                    // run_periodic(my_task);
-
-                    // A simple loop for demonstration if the above are not available
-                    while (true)
-                    {
-                        my_task();
-                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    }
-                })
+        update_period(1'000'000);
+        run_periodic(my_task); })
         .detach();
 
     // --- 5. The Main Loop (replaces glutMainLoop) ---

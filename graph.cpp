@@ -84,42 +84,45 @@ void Graph::character_callback(GLFWwindow *window, unsigned int codepoint)
         graph->handleTextInput(codepoint);
     }
 }
+void Graph::drawText(double x, double y, const char *text)
+{
+    char buffer[99999]; // ~500 chars
+    int num_quads;
+
+    num_quads = stb_easy_font_print(x, y, (char *)text, NULL, buffer, sizeof(buffer));
+    glColor3f(0, 0, 0); // black text
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glVertexPointer(2, GL_DOUBLE, 16, buffer);
+    glDrawArrays(GL_QUADS, 0, num_quads * 4);
+    glDisableClientState(GL_VERTEX_ARRAY);
+}
 
 // --- Display Function ---
 // The core OpenGL drawing logic remains almost identical.
 void Graph::display()
 {
+
+    // Clear the screen first
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    // If there is no data, just return
+    if (dataPoints.empty())
+        return;
+
+    // Now it's safe to access front() and back()
+    double tmin = dataPoints.front().first;
+    double tmax = dataPoints.back().first;
+    if (tmax == tmin)
+        tmax += 1.0;
+
     // Set up projection matrix
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     glOrtho(0, winW, 0, winH, -1, 1);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    // X axis values (min and max)
-    std::string xminLabel = std::to_string(tmin);
-    std::string xmaxLabel = std::to_string(tmax);
-    drawText(graphX, graphY - 20, xminLabel.c_str());
-    drawText(graphX + graphW - 40, graphY - 20, xmaxLabel.c_str());
 
-    // Y axis values (min and max)
-    std::string yminLabel = std::to_string(vmin);
-    std::string ymaxLabel = std::to_string(vmax);
-    drawText(graphX - 40, graphY, yminLabel.c_str());
-    drawText(graphX - 40, graphY + graphH - 10, ymaxLabel.c_str());
-    // Clear the screen
-    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    if (dataPoints.empty())
-    {
-        return; // Nothing to draw
-    }
-
-    // --- Find data min/max for scaling ---
-    double tmin = dataPoints.front().first;
-    double tmax = dataPoints.back().first;
-    if (tmax == tmin)
-        tmax += 1.0;
 
     double vmin = dataPoints.front().second;
     double vmax = vmin;
@@ -132,11 +135,33 @@ void Graph::display()
         vmax += 1.0;
 
     // Define graph area (with padding)
-    const float padding = 50.0f;
-    float graphX = padding;
-    float graphY = padding;
-    float graphW = winW - 2 * padding;
-    float graphH = winH - 2 * padding;
+    const double padding = 50.0f;
+    double graphX = padding;
+    double graphY = padding;
+    double graphW = winW - 2 * padding;
+    double graphH = winH - 2 * padding;
+
+    // X axis values (min and max)
+    const std::string xminLabel = std::to_string(tmin);
+    const std::string xmaxLabel = std::to_string(tmax);
+    Graph::drawText(graphX, graphY - 20, xminLabel.c_str());
+    Graph::drawText(graphX + graphW - 40, graphY - 20, xmaxLabel.c_str());
+
+    // Y axis values (min and max)
+    const std::string yminLabel = std::to_string(vmin);
+    const std::string ymaxLabel = std::to_string(vmax);
+    Graph::drawText(graphX - 40, graphY, yminLabel.c_str());
+    Graph::drawText(graphX - 40, graphY + graphH - 10, ymaxLabel.c_str());
+    // Clear the screen
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    if (dataPoints.empty())
+    {
+        return; // Nothing to draw
+    }
+
+
 
     // --- Draw axes ---
     glColor3f(0, 0, 0);
@@ -154,22 +179,10 @@ void Graph::display()
     glBegin(GL_LINE_STRIP);
     for (const auto &point : dataPoints)
     {
-        float x = graphX + (point.first - tmin) / (tmax - tmin) * graphW;
-        float y = graphY + (point.second - vmin) / (vmax - vmin) * graphH;
+        double x = graphX + (point.first - tmin) / (tmax - tmin) * graphW;
+        double y = graphY + (point.second - vmin) / (vmax - vmin) * graphH;
         glVertex2f(x, y);
     }
     glEnd();
 }
 
-void drawText(float x, float y, const char *text)
-{
-    char buffer[99999]; // ~500 chars
-    int num_quads;
-
-    num_quads = stb_easy_font_print(x, y, (char *)text, NULL, buffer, sizeof(buffer));
-    glColor3f(0, 0, 0); // black text
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glVertexPointer(2, GL_FLOAT, 16, buffer);
-    glDrawArrays(GL_QUADS, 0, num_quads * 4);
-    glDisableClientState(GL_VERTEX_ARRAY);
-}

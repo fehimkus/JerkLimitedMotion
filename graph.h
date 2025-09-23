@@ -26,7 +26,7 @@ public:
     void handleKeyboard(int key);
     void handleTextInput(unsigned int codepoint);
     void setFramebufferSize(int w, int h);
-    void drawText(float x, float y, const std::string &text);
+    void drawText(double x, double y, const char *text);
 
     // --- GLFW Callbacks ---
     // These must be static to be used with GLFW's C-style API

@@ -21,7 +21,7 @@
 //      Takes a string and returns the horizontal size and the
 //      vertical size (which can vary if 'text' has newlines).
 //
-//   int stb_easy_font_print(float x, float y,
+//   int stb_easy_font_print(double x, double y,
 //                           char *text, unsigned char color[4],
 //                           void *vertex_buffer, int vbuf_size)
 //
@@ -35,9 +35,9 @@
 //
 //      The vertices are stored in an interleaved format:
 //
-//         x:float
-//         y:float
-//         z:float
+//         x:double
+//         y:double
+//         z:double
 //         color:uint8[4]
 //
 //      You can ignore z and color if you get them from elsewhere
@@ -54,7 +54,7 @@
 //      If your API doesn't draw quads, build a reusable index
 //      list that allows you to render quads as indexed triangles.
 //
-//   void stb_easy_font_spacing(float spacing)
+//   void stb_easy_font_spacing(double spacing)
 //
 //      Use positive values to expand the space between characters,
 //      and small negative values (no smaller than -1.5) to contract
@@ -88,7 +88,7 @@
 //    Here's sample code for old OpenGL; it's a lot more complicated
 //    to make work on modern APIs, and that's your problem.
 //
-void print_string(float x, float y, char *text, float r, float g, float b)
+void print_string(double x, double y, char *text, double r, double g, double b)
 {
   static char buffer[99999]; // ~500 chars
   int num_quads;
@@ -97,7 +97,7 @@ void print_string(float x, float y, char *text, float r, float g, float b)
 
   glColor3f(r,g,b);
   glEnableClientState(GL_VERTEX_ARRAY);
-  glVertexPointer(2, GL_FLOAT, 16, buffer);
+  glVertexPointer(2, GL_double, 16, buffer);
   glDrawArrays(GL_QUADS, 0, num_quads*4);
   glDisableClientState(GL_VERTEX_ARRAY);
 }
@@ -170,18 +170,18 @@ typedef struct
    unsigned char c[4];
 } stb_easy_font_color;
 
-static int stb_easy_font_draw_segs(float x, float y, unsigned char *segs, int num_segs, int vertical, stb_easy_font_color c, char *vbuf, int vbuf_size, int offset)
+static int stb_easy_font_draw_segs(double x, double y, unsigned char *segs, int num_segs, int vertical, stb_easy_font_color c, char *vbuf, int vbuf_size, int offset)
 {
     int i,j;
     for (i=0; i < num_segs; ++i) {
         int len = segs[i] & 7;
-        x += (float) ((segs[i] >> 3) & 1);
+        x += (double) ((segs[i] >> 3) & 1);
         if (len && offset+64 <= vbuf_size) {
-            float y0 = y + (float) (segs[i]>>4);
+            double y0 = y + (double) (segs[i]>>4);
             for (j=0; j < 4; ++j) {
-                * (float *) (vbuf+offset+0) = x  + (j==1 || j==2 ? (vertical ? 1 : len) : 0);
-                * (float *) (vbuf+offset+4) = y0 + (    j >= 2   ? (vertical ? len : 1) : 0);
-                * (float *) (vbuf+offset+8) = 0.f;
+                * (double *) (vbuf+offset+0) = x  + (j==1 || j==2 ? (vertical ? 1 : len) : 0);
+                * (double *) (vbuf+offset+4) = y0 + (    j >= 2   ? (vertical ? len : 1) : 0);
+                * (double *) (vbuf+offset+8) = 0.f;
                 * (stb_easy_font_color *) (vbuf+offset+12) = c;
                 offset += 16;
             }
@@ -190,16 +190,16 @@ static int stb_easy_font_draw_segs(float x, float y, unsigned char *segs, int nu
     return offset;
 }
 
-static float stb_easy_font_spacing_val = 0;
-static void stb_easy_font_spacing(float spacing)
+static double stb_easy_font_spacing_val = 0;
+static void stb_easy_font_spacing(double spacing)
 {
    stb_easy_font_spacing_val = spacing;
 }
 
-static int stb_easy_font_print(float x, float y, char *text, unsigned char color[4], void *vertex_buffer, int vbuf_size)
+static int stb_easy_font_print(double x, double y, char *text, unsigned char color[4], void *vertex_buffer, int vbuf_size)
 {
     char *vbuf = (char *) vertex_buffer;
-    float start_x = x;
+    double start_x = x;
     int offset = 0;
 
     stb_easy_font_color c = { 255,255,255,255 }; // use structure copying to avoid needing depending on memcpy()
@@ -211,7 +211,7 @@ static int stb_easy_font_print(float x, float y, char *text, unsigned char color
             x = start_x;
         } else {
             unsigned char advance = stb_easy_font_charinfo[*text-32].advance;
-            float y_ch = advance & 16 ? y+1 : y;
+            double y_ch = advance & 16 ? y+1 : y;
             int h_seg, v_seg, num_h, num_v;
             h_seg = stb_easy_font_charinfo[*text-32  ].h_seg;
             v_seg = stb_easy_font_charinfo[*text-32  ].v_seg;
@@ -229,8 +229,8 @@ static int stb_easy_font_print(float x, float y, char *text, unsigned char color
 
 static int stb_easy_font_width(char *text)
 {
-    float len = 0;
-    float max_len = 0;
+    double len = 0;
+    double max_len = 0;
     while (*text) {
         if (*text == '\n') {
             if (len > max_len) max_len = len;
@@ -247,7 +247,7 @@ static int stb_easy_font_width(char *text)
 
 static int stb_easy_font_height(char *text)
 {
-    float y = 0;
+    double y = 0;
     int nonempty_line=0;
     while (*text) {
         if (*text == '\n') {

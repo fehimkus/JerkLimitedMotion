@@ -1,61 +1,24 @@
-# Periodic Task Visualization Project
+# Periodic Task / Motion Visualization (ImGui + ImPlot)
 
-A C++ application that visualizes periodic task execution times using OpenGL with a real-time 2D graph and UI controls.
+This app shows real-time **Position / Velocity / Acceleration** plots using **Dear ImGui** and **ImPlot**.
+It also includes a simple jerk-limited simulator to **Calculate** a motion profile from inputs.
 
-## Requirements
+## What’s inside
+- **GLFW** window + OpenGL2 backend
+- **Dear ImGui** UI (controls + windows)
+- **ImPlot** for fast plotting (3 stacked subplots)
+- Random motion generator (Start/Stop)
+- “Calculate” button: simulate trajectory with target, Vmax, Amax, Dmax, Jmax
 
-- C++ compiler with C++11 support or higher  
-- CMake 3.22 or higher  
-- OpenGL development libraries  
-- GLFW3  
-
----
-
-## Installation
+## Build Requirements
+- CMake ≥ 3.22
+- A C++17 compiler
+- OpenGL dev headers
+- X11 dev packages on Linux (for GLFW)
 
 ### Debian/Ubuntu
-
 ```bash
-# Update package list
 sudo apt update
-
-# Install build tools
-sudo apt install build-essential cmake
-
-# Install OpenGL development libraries
-sudo apt install libgl1-mesa-dev libglu1-mesa-dev
-
-# Install GLFW development libraries
-sudo apt install libglfw3-dev
-
-# Install X11 development libraries (for window/input support)
-sudo apt install libx11-dev libxrandr-dev libxi-dev libxinerama-dev libxcursor-dev
-```
-### Debian/Ubuntu
-
-```bash
-# Install build tools, OpenGL, and GLFW
-sudo dnf install gcc-c++ cmake mesa-libGL-devel mesa-libGLU-devel glfw-devel libX11-devel libXi-devel libXcursor-devel libXrandr-devel libXinerama-devel
-```
-### MacOS(Homebrew)
-
-```bash
-# Install CMake and GLFW
-brew install cmake glfw
-```
-
-### Windows(vcpkg)
-
-```bash
-
-# Clone vcpkg if not already installed
-git clone https://github.com/microsoft/vcpkg.git
-cd vcpkg
-.\bootstrap-vcpkg.bat
-
-# Install dependencies
-.\vcpkg install glfw3
-
-# Integrate vcpkg with CMake
-.\vcpkg integrate install
-```
+sudo apt install -y build-essential cmake \
+  libgl1-mesa-dev libglu1-mesa-dev \
+  libx11-dev libxrandr-dev libxi-dev libxinerama-dev libxcursor-dev

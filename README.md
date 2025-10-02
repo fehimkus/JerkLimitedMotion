@@ -22,7 +22,7 @@ using **Dear ImGui** and **ImPlot**.\
 It includes a simple jerk-limited simulator to **Calculate** a motion
 profile from user inputs.
 
-![Motion Profile Demo](images/1.png)
+![Motion Profile Demo](images/2.png)
 
 ------------------------------------------------------------------------
 

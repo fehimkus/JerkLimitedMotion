@@ -18,6 +18,9 @@
 Profiler profiler;
 std::atomic<bool> is_running{false};
 std::atomic<double> deltaTime{0.0};
+unsigned int cycle_time_us = 100'000; // 100 ms default
+unsigned int BUFFER_SIZE = 2'000'000'000 / cycle_time_us;
+double prev_cycle_time = 0.0;
 // --------------------------
 // UI BASE DIMENSIONS
 // --------------------------
@@ -34,8 +37,6 @@ float getScaleFactorY(float currentHeight)
 {
     return currentHeight / BASE_HEIGHT;
 }
-constexpr size_t BUFFER_SIZE = 2000; // points shown per plot
-double prev_cycle_time = 0.0;
 
 // Random number generators
 std::mt19937 rng(std::random_device{}());
@@ -47,10 +48,10 @@ std::uniform_int_distribution<int> accDist(30, 100);
 struct UserInput
 {
     double target_pos = 5.0;
-    double max_vel = 20.0;
-    double max_acc = 50.0;
-    double max_dec = 50.0;
-    double jerk = 100.0;
+    double max_vel = 10.0;
+    double max_acc = 70.0;
+    double max_dec = 40.0;
+    double jerk = 800.0;
 } user_input;
 
 // --------------------------
@@ -121,7 +122,7 @@ void updateProfileFromUserInput()
     profiler.MaxDeceleration = user_input.max_dec;
     profiler.Jerk = user_input.jerk;
 
-    profiler.TargetDistance = std::abs(profiler.TargetPosition - profiler.CurrentPosition);
+    profiler.TargetDistance = std::fabs(profiler.TargetPosition - profiler.CurrentPosition);
     profiler.direction = (profiler.TargetPosition - profiler.CurrentPosition < 0) ? -1 : 1;
 
     profiler.CalculatePositionProfile();
@@ -147,6 +148,10 @@ void *positionGenerator()
         if (profiler.CurrentAcceleration >= profiler.a11)
         {
             profiler.CurrentAcceleration = profiler.a11;
+            // std::cout << "Stage 10: Max acceleration reached" << std::endl;
+            // std::cout << "CurrentAcceleration: " << profiler.CurrentAcceleration << " \n";
+            // std::cout << "CurrentVelocity: " << profiler.CurrentVelocity << " \n";
+            // std::cout << "CurrentPosition: " << profiler.CurrentPosition << " \n";
             profiler.stage = 20;
         }
         else
@@ -159,7 +164,11 @@ void *positionGenerator()
     case 20: // Constant acceleration ------- until enough distance for ramp down
         if (profiler.CurrentVelocity >= profiler.v12)
         {
-            profiler.CurrentVelocity = profiler.v12;
+            // profiler.CurrentVelocity = profiler.v12;
+            // std::cout << "Stage 20: Max velocity reached" << std::endl;
+            // std::cout << "CurrentAcceleration: " << profiler.CurrentAcceleration << " \n";
+            // std::cout << "CurrentVelocity: " << profiler.CurrentVelocity << " \n";
+            // std::cout << "CurrentPosition: " << profiler.CurrentPosition << " \n";
             profiler.stage = 30;
         }
         else
@@ -172,6 +181,10 @@ void *positionGenerator()
         if (profiler.CurrentAcceleration <= 0)
         {
             profiler.CurrentAcceleration = 0;
+            // std::cout << "Stage 30: acceleration need to decrease" << std::endl;
+            // std::cout << "CurrentAcceleration: " << profiler.CurrentAcceleration << " \n";
+            // std::cout << "CurrentVelocity: " << profiler.CurrentVelocity << " \n";
+            // std::cout << "CurrentPosition: " << profiler.CurrentPosition << " \n";
             profiler.stage = 40;
         }
         else
@@ -182,16 +195,25 @@ void *positionGenerator()
         break;
 
     case 40: // Cruise
-        if ((abs(profiler.TargetPosition - profiler.CurrentPosition)) <= (profiler.x21 + profiler.x22 + profiler.x23))
+        if ((fabs(profiler.TargetPosition - profiler.CurrentPosition)) <= (profiler.x21 + profiler.x22 + profiler.x23))
         {
+            // std::cout << "Stage 40: Deceleration needed" << std::endl;
+            // std::cout << "Target position: " << profiler.TargetPosition << std::endl;
+            // std::cout << "CurrentAcceleration: " << profiler.CurrentAcceleration << " \n";
+            // std::cout << "CurrentVelocity: " << profiler.CurrentVelocity << " \n";
+            // std::cout << "CurrentPosition: " << profiler.CurrentPosition << " \n";
             profiler.stage = 50;
         }
         break;
 
     case 50: // Begin deceleration
-        if (abs(profiler.CurrentAcceleration) > abs(profiler.a21))
+        if (fabs(profiler.CurrentAcceleration) > fabs(profiler.a21))
         {
             profiler.CurrentAcceleration = profiler.a21;
+            // std::cout << "Stage 50: Max deceleration reached" << std::endl;
+            // std::cout << "CurrentAcceleration: " << profiler.CurrentAcceleration << " \n";
+            // std::cout << "CurrentVelocity: " << profiler.CurrentVelocity << " \n";
+            // std::cout << "CurrentPosition: " << profiler.CurrentPosition << " \n";
             profiler.stage = 60;
         }
         else
@@ -204,7 +226,11 @@ void *positionGenerator()
     case 60: // Constant deceleration
         if (profiler.CurrentVelocity <= profiler.v22)
         {
-            profiler.CurrentVelocity = profiler.v22;
+            // profiler.CurrentVelocity = profiler.v22;
+            // std::cout << "Stage 60: Min velocity reached" << std::endl;
+            // std::cout << "CurrentAcceleration: " << profiler.CurrentAcceleration << " \n";
+            // std::cout << "CurrentVelocity: " << profiler.CurrentVelocity << " \n";
+            // std::cout << "CurrentPosition: " << profiler.CurrentPosition << " \n";
             profiler.stage = 70;
         }
         else
@@ -215,9 +241,13 @@ void *positionGenerator()
 
     case 70: // End deceleration ramp
     {
-        if ((std::abs(profiler.CurrentPosition) >= std::abs(profiler.TargetPosition)) ||
+        if ((std::fabs(profiler.CurrentPosition) >= std::fabs(profiler.TargetPosition)) ||
             (profiler.CurrentVelocity < 0.0f))
         {
+            // std::cout << "Stage 70: Target position reached" << std::endl;
+            // std::cout << "CurrentAcceleration: " << profiler.CurrentAcceleration << " \n";
+            // std::cout << "CurrentVelocity: " << profiler.CurrentVelocity << " \n";
+            // std::cout << "CurrentPosition: " << profiler.CurrentPosition << " \n";
             profiler.CurrentVelocity = 0;
             profiler.CurrentAcceleration = 0;
             profiler.CurrentPosition = profiler.TargetPosition;
@@ -225,6 +255,7 @@ void *positionGenerator()
         }
         else
         {
+            // std::cout << "pos " << profiler.CurrentPosition << " vel " << profiler.CurrentVelocity << " acc " << profiler.CurrentAcceleration << " stage " << profiler.stage << std::endl;
             profiler.CurrentAcceleration += profiler.Jerk * deltaTime;
             profiler.CurrentVelocity += profiler.CurrentAcceleration * deltaTime;
         }
@@ -392,7 +423,7 @@ int main()
 
     std::thread([=]()
                 {
-        update_period(1'000'000);
+        update_period(cycle_time_us);
         run_periodic(my_task); })
         .detach();
 
@@ -416,31 +447,60 @@ int main()
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        ImGui::Begin("Main Window");
+        ImGui::Begin("Motion Parameters");
 
+        ImGui::InputDouble("Target Position", &user_input.target_pos, 0.1, 1.0, "%.3f");
+        ImGui::InputDouble("Max Velocity", &user_input.max_vel, 0.1, 1.0, "%.3f");
+        ImGui::InputDouble("Max Accel", &user_input.max_acc, 0.1, 1.0, "%.3f");
+        ImGui::InputDouble("Max Decel", &user_input.max_dec, 0.1, 1.0, "%.3f");
+        ImGui::InputDouble("Jerk", &user_input.jerk, 1.0, 10.0, "%.3f");
+
+
+        ImGui::End();
+
+        ImGui::Begin("Main Window");
         // --------------------------
         // Control Panel
         // --------------------------
-        if (ImGui::Button("Start", ImVec2(100 * scaleX, 40 * scaleY)))
+        if (ImGui::Button("Restart", ImVec2(100 * scaleX, 40 * scaleY)))
         {
+            // Stop current run
+            is_running = false;
+
+            // Reset profiler state
+            profiler.CurrentPosition = 0.0;
+            profiler.CurrentVelocity = 0.0;
+            profiler.CurrentAcceleration = 0.0;
+
+            // Clear all graphs
+            positionPlot = PlotBuffer();
+            velocityPlot = PlotBuffer();
+            accelerationPlot = PlotBuffer();
+            deltaTime = 0.0;
+            prev_cycle_time = 0.0;
+            // Apply parameters
             profiler.TargetPosition = user_input.target_pos;
             profiler.MaxVelocity = user_input.max_vel;
             profiler.MaxAcceleration = user_input.max_acc;
             profiler.MaxDeceleration = user_input.max_dec;
             profiler.Jerk = user_input.jerk;
-            profiler.TargetDistance = std::abs(profiler.TargetPosition - profiler.CurrentPosition);
+            profiler.TargetDistance = std::fabs(profiler.TargetPosition - profiler.CurrentPosition);
             profiler.direction = (profiler.TargetPosition - profiler.CurrentPosition < 0) ? -1 : 1;
             profiler.CalculatePositionProfile();
             profiler.begin = std::chrono::high_resolution_clock::now();
             profiler.stage = 10;
-            std::cout << "Motion STARTED with parameters:" << std::endl;
+
+            // Start motion again
+            is_running = true;
+
+            std::cout << "Motion RESTARTED with cleared graphs and parameters:" << std::endl;
             std::cout << "  Target Position: " << user_input.target_pos << std::endl;
             std::cout << "  Max Velocity: " << user_input.max_vel << std::endl;
             std::cout << "  Max Acceleration: " << user_input.max_acc << std::endl;
             std::cout << "  Max Deceleration: " << user_input.max_dec << std::endl;
             std::cout << "  Jerk: " << user_input.jerk << std::endl;
-            is_running = true;
         }
+
         ImGui::SameLine();
         if (ImGui::Button("Stop", ImVec2(100 * scaleX, 40 * scaleY)))
         {
@@ -460,7 +520,7 @@ int main()
         // --------------------------
         ImVec2 available = ImGui::GetContentRegionAvail();
         float total_height = available.y;
-        float plot_height = (total_height / 3.0f) - (ImGui::GetStyle().ItemSpacing.y * scaleY);
+        float plot_height = (total_height) / 3.50f;
 
         // Draw Position plot
         ImGui::Text("Position");
@@ -485,6 +545,7 @@ int main()
         ImGui::EndChild();
 
         ImGui::End();
+
 
         // --------------------------
         // Rendering

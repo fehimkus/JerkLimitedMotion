@@ -1,3 +1,8 @@
+# 🚀 FASTEST TRAJECTORY GENERATOR EVER 🏎️💨  
+*Buckle up!* This is not your average motion planner.  
+It’s built for **speed, smoothness, and pure CNC-style adrenaline**.  
+If you blink, you’ll miss the move. ⚡  
+
 # ⚠️ DEVELOPMENT NOTICE
 
 This project is **still in development** and needs your attention.\

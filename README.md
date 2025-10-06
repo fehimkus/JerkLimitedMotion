@@ -78,7 +78,17 @@ sudo pacman -S --needed base-devel cmake   mesa glu libx11 libxrandr libxi   lib
 
     ``` bash
     git clone https://github.com/microsoft/vcpkg
+    ```
+    ```
+    $env:VCPKG_ROOT = "C:\path\to\vcpkg"
+    ```
+    ```
+    $env:PATH = "$env:VCPKG_ROOT;$env:PATH"
+    ```
+    ```
     ./vcpkg/bootstrap-vcpkg.sh
+    ```
+    ```
     ./vcpkg install glfw3
     ```
 

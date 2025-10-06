@@ -1,4 +1,8 @@
-#include <unistd.h>
+#ifdef _WIN32
+    #include <stdio.h>
+#else
+    #include <unistd.h>
+#endif
 #include <csignal>
 #include <cmath>
 #include <iostream>

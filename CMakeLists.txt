@@ -18,9 +18,12 @@ find_package(OpenGL REQUIRED)
 include(FetchContent)
 
 # glfw
-set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_WAYLAND OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_X11 ON CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+
 FetchContent_Declare(
     glfw
     GIT_REPOSITORY https://github.com/glfw/glfw.git
@@ -28,7 +31,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glfw)
 
-# imgui (OpenGL2 + GLFW backend to avoid needing a GL loader)
+# imgui (OpenGL3 + GLFW backend)
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
@@ -44,7 +47,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(implot)
 
-# ---- imgui library (with backends) ----
+# ---- imgui library (with OpenGL3 backend) ----
 set(IMGUI_DIR ${imgui_SOURCE_DIR})
 add_library(imgui STATIC
     ${IMGUI_DIR}/imgui.cpp
@@ -52,7 +55,7 @@ add_library(imgui STATIC
     ${IMGUI_DIR}/imgui_tables.cpp
     ${IMGUI_DIR}/imgui_widgets.cpp
     ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
-    ${IMGUI_DIR}/backends/imgui_impl_opengl2.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp  # OpenGL3 backend
 )
 target_include_directories(imgui PUBLIC
     ${IMGUI_DIR}
@@ -85,14 +88,30 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     implot
 )
 
-# macOS frameworks for GLFW
+# Add OpenGL3 definitions
+target_compile_definitions(${PROJECT_NAME} PRIVATE 
+    IMGUI_IMPL_OPENGL_LOADER_GL3W
+)
+
+# macOS frameworks for GLFW and OpenGL
 if(APPLE)
+    find_library(COCOA_LIBRARY Cocoa)
+    find_library(IOKIT_LIBRARY IOKit)
+    find_library(COREVIDEO_LIBRARY CoreVideo)
     target_link_libraries(${PROJECT_NAME} PRIVATE
-        "-framework Cocoa"
-        "-framework IOKit"
-        "-framework CoreFoundation"
-        "-framework CoreVideo"
+        ${COCOA_LIBRARY}
+        ${IOKIT_LIBRARY}
+        ${COREVIDEO_LIBRARY}
     )
 endif()
 
-# Windows: ensure we link opengl32 (OpenGL::GL handles this on modern CMake)
+# Linux X11 libraries
+if(UNIX AND NOT APPLE)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${X11_LIBRARIES})
+    target_include_directories(${PROJECT_NAME} PRIVATE ${X11_INCLUDE_DIRS})
+endif()
+
+# Windows specific settings
+if(WIN32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE opengl32)
+endif()

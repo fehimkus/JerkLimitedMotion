@@ -2,567 +2,383 @@
 #include <thread>
 #include <atomic>
 #include <iostream>
-#include <deque>
-#include "periodic.h"
-#include "profiler.h"
-
-// GLFW and ImGui headers
+#include <vector>
+#include <algorithm>
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
-#include "imgui_impl_opengl2.h"
+#include "imgui_impl_opengl3.h"
 #include "implot.h"
 #include <GLFW/glfw3.h>
 
-
-// Global objects
-Profiler profiler;
-std::atomic<bool> is_running{false};
-std::atomic<double> deltaTime{0.0};
-unsigned int cycle_time_us = 100'000; // 100 ms default
-unsigned int BUFFER_SIZE = 2'000'000'000 / cycle_time_us;
-double prev_cycle_time = 0.0;
-// --------------------------
-// UI BASE DIMENSIONS
-// --------------------------
-constexpr float BASE_WIDTH = 1280.0f;
-constexpr float BASE_HEIGHT = 1280.0f;
-
-// Helper to calculate scaling factors
-float getScaleFactorX(float currentWidth)
-{
-    return currentWidth / BASE_WIDTH;
-}
-
-float getScaleFactorY(float currentHeight)
-{
-    return currentHeight / BASE_HEIGHT;
-}
-
-// Random number generators
-std::mt19937 rng(std::random_device{}());
-std::uniform_real_distribution<double> posDist(-10.0, 10.0);
-std::uniform_int_distribution<int> velDist(5, 30);
-std::uniform_int_distribution<int> accDist(30, 100);
-
-// User input values
-struct UserInput
-{
-    double target_pos = 5.0;
-    double max_vel = 10.0;
-    double max_acc = 70.0;
-    double max_dec = 40.0;
-    double jerk = 800.0;
-} user_input;
-
-// --------------------------
-// Circular buffer for plotting
-// --------------------------
-struct PlotBuffer
-{
-    std::vector<float> x_data;
-    std::vector<float> y_data;
-    size_t index = 0;
-    bool full = false;
-    float latest_time = 0.0f;
-
-    PlotBuffer()
-    {
-        x_data.resize(BUFFER_SIZE, 0.0f);
-        y_data.resize(BUFFER_SIZE, 0.0f);
-    }
-
-    void addPoint(float x, float y)
-    {
-        x_data[index] = x;
-        y_data[index] = y;
-        index = (index + 1) % BUFFER_SIZE;
-        if (index == 0)
-            full = true;
-        latest_time = x;
-    }
-
-    float earliestTime() const
-    {
-        return latest_time - (BUFFER_SIZE * deltaTime);
-    }
-
-    std::pair<float, float> getYBounds() const
-    {
-        float minVal = 1e9f;
-        float maxVal = -1e9f;
-        size_t count = full ? BUFFER_SIZE : index;
-        for (size_t i = 0; i < count; i++)
-        {
-            if (y_data[i] < minVal)
-                minVal = y_data[i];
-            if (y_data[i] > maxVal)
-                maxVal = y_data[i];
-        }
-        if (count == 0)
-        {
-            minVal = -1.0f;
-            maxVal = 1.0f;
-        }
-        return {minVal, maxVal};
-    }
+// Simple profiler structure
+struct Profiler {
+    double CurrentPosition = 0.0;
+    double CurrentVelocity = 0.0;
+    double CurrentAcceleration = 0.0;
+    double TargetPosition = 5.0;
+    double MaxVelocity = 10.0;
+    double MaxAcceleration = 70.0;
+    double MaxDeceleration = 40.0;
+    double Jerk = 800.0;
+    int stage = 0;
 };
 
-// --------------------------
-// Global buffers for three plots
-// --------------------------
-PlotBuffer positionPlot;
-PlotBuffer velocityPlot;
-PlotBuffer accelerationPlot;
+// Global variables
+Profiler profiler;
+std::atomic<bool> is_running{false};
+std::vector<float> time_data, position_data, velocity_data, acceleration_data;
+constexpr int MAX_DATA_POINTS = 2000;
+float current_time = 0.0f;
 
-void updateProfileFromUserInput()
-{
-    profiler.TargetPosition = user_input.target_pos;
-    profiler.MaxVelocity = user_input.max_vel;
-    profiler.MaxAcceleration = user_input.max_acc;
-    profiler.MaxDeceleration = user_input.max_dec;
-    profiler.Jerk = user_input.jerk;
+// Window constants
+constexpr int WINDOW_WIDTH = 1200;
+constexpr int WINDOW_HEIGHT = 800;
 
-    profiler.TargetDistance = std::fabs(profiler.TargetPosition - profiler.CurrentPosition);
-    profiler.direction = (profiler.TargetPosition - profiler.CurrentPosition < 0) ? -1 : 1;
+// Random number generator
+std::random_device rd;
+std::mt19937 gen(rd());
 
-    profiler.CalculatePositionProfile();
-    profiler.begin = std::chrono::high_resolution_clock::now();
-    profiler.stage = 10;
-
-    std::cout << "Profile updated - Target: " << profiler.TargetPosition
-              << ", MaxVel: " << profiler.MaxVelocity
-              << ", Stage: " << profiler.stage << std::endl;
-}
-
-void *positionGenerator()
-{
-    double discreteTime{};
-
-    discreteTime = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - profiler.begin).count()) * 1e-6f;
-
-    deltaTime = discreteTime - prev_cycle_time;
-
-    switch (profiler.stage)
-    {
-    case 10: // Accelerate with jerk ------- until max acceleration reached
-        if (profiler.CurrentAcceleration >= profiler.a11)
-        {
-            profiler.CurrentAcceleration = profiler.a11;
-            // std::cout << "Stage 10: Max acceleration reached" << std::endl;
-            // std::cout << "CurrentAcceleration: " << profiler.CurrentAcceleration << " \n";
-            // std::cout << "CurrentVelocity: " << profiler.CurrentVelocity << " \n";
-            // std::cout << "CurrentPosition: " << profiler.CurrentPosition << " \n";
-            profiler.stage = 20;
-        }
-        else
-        {
-            profiler.CurrentAcceleration += profiler.Jerk * deltaTime;
-            profiler.CurrentVelocity += profiler.CurrentAcceleration * deltaTime;
-        }
-        break;
-
-    case 20: // Constant acceleration ------- until enough distance for ramp down
-        if (profiler.CurrentVelocity >= profiler.v12)
-        {
-            // profiler.CurrentVelocity = profiler.v12;
-            // std::cout << "Stage 20: Max velocity reached" << std::endl;
-            // std::cout << "CurrentAcceleration: " << profiler.CurrentAcceleration << " \n";
-            // std::cout << "CurrentVelocity: " << profiler.CurrentVelocity << " \n";
-            // std::cout << "CurrentPosition: " << profiler.CurrentPosition << " \n";
-            profiler.stage = 30;
-        }
-        else
-        {
-            profiler.CurrentVelocity += profiler.CurrentAcceleration * deltaTime;
-        }
-        break;
-
-    case 30: // Ramp down acceleration ------- until max velocity reached
-        if (profiler.CurrentAcceleration <= 0)
-        {
-            profiler.CurrentAcceleration = 0;
-            // std::cout << "Stage 30: acceleration need to decrease" << std::endl;
-            // std::cout << "CurrentAcceleration: " << profiler.CurrentAcceleration << " \n";
-            // std::cout << "CurrentVelocity: " << profiler.CurrentVelocity << " \n";
-            // std::cout << "CurrentPosition: " << profiler.CurrentPosition << " \n";
-            profiler.stage = 40;
-        }
-        else
-        {
-            profiler.CurrentAcceleration -= profiler.Jerk * deltaTime;
-            profiler.CurrentVelocity += profiler.CurrentAcceleration * deltaTime;
-        }
-        break;
-
-    case 40: // Cruise
-        if ((fabs(profiler.TargetPosition - profiler.CurrentPosition)) <= (profiler.x21 + profiler.x22 + profiler.x23))
-        {
-            // std::cout << "Stage 40: Deceleration needed" << std::endl;
-            // std::cout << "Target position: " << profiler.TargetPosition << std::endl;
-            // std::cout << "CurrentAcceleration: " << profiler.CurrentAcceleration << " \n";
-            // std::cout << "CurrentVelocity: " << profiler.CurrentVelocity << " \n";
-            // std::cout << "CurrentPosition: " << profiler.CurrentPosition << " \n";
-            profiler.stage = 50;
-        }
-        break;
-
-    case 50: // Begin deceleration
-        if (fabs(profiler.CurrentAcceleration) > fabs(profiler.a21))
-        {
-            profiler.CurrentAcceleration = profiler.a21;
-            // std::cout << "Stage 50: Max deceleration reached" << std::endl;
-            // std::cout << "CurrentAcceleration: " << profiler.CurrentAcceleration << " \n";
-            // std::cout << "CurrentVelocity: " << profiler.CurrentVelocity << " \n";
-            // std::cout << "CurrentPosition: " << profiler.CurrentPosition << " \n";
-            profiler.stage = 60;
-        }
-        else
-        {
-            profiler.CurrentAcceleration -= profiler.Jerk * deltaTime;
-            profiler.CurrentVelocity += profiler.CurrentAcceleration * deltaTime;
-        }
-        break;
-
-    case 60: // Constant deceleration
-        if (profiler.CurrentVelocity <= profiler.v22)
-        {
-            // profiler.CurrentVelocity = profiler.v22;
-            // std::cout << "Stage 60: Min velocity reached" << std::endl;
-            // std::cout << "CurrentAcceleration: " << profiler.CurrentAcceleration << " \n";
-            // std::cout << "CurrentVelocity: " << profiler.CurrentVelocity << " \n";
-            // std::cout << "CurrentPosition: " << profiler.CurrentPosition << " \n";
-            profiler.stage = 70;
-        }
-        else
-        {
-            profiler.CurrentVelocity += profiler.CurrentAcceleration * deltaTime;
-        }
-        break;
-
-    case 70: // End deceleration ramp
-    {
-        if ((std::fabs(profiler.CurrentPosition) >= std::fabs(profiler.TargetPosition)) ||
-            (profiler.CurrentVelocity < 0.0f))
-        {
-            // std::cout << "Stage 70: Target position reached" << std::endl;
-            // std::cout << "CurrentAcceleration: " << profiler.CurrentAcceleration << " \n";
-            // std::cout << "CurrentVelocity: " << profiler.CurrentVelocity << " \n";
-            // std::cout << "CurrentPosition: " << profiler.CurrentPosition << " \n";
-            profiler.CurrentVelocity = 0;
-            profiler.CurrentAcceleration = 0;
-            profiler.CurrentPosition = profiler.TargetPosition;
-            profiler.stage = 0;
-        }
-        else
-        {
-            // std::cout << "pos " << profiler.CurrentPosition << " vel " << profiler.CurrentVelocity << " acc " << profiler.CurrentAcceleration << " stage " << profiler.stage << std::endl;
-            profiler.CurrentAcceleration += profiler.Jerk * deltaTime;
-            profiler.CurrentVelocity += profiler.CurrentAcceleration * deltaTime;
-        }
-    }
-    break;
-
-    case 0:
-        // Idle state - motion completed
-        break;
-
-    default:
-        break;
+// Function to calculate plot bounds based on input parameters
+void calculatePlotBounds(double& pos_min, double& pos_max, 
+                        double& vel_min, double& vel_max,
+                        double& acc_min, double& acc_max) {
+    // Position bounds - based on target position with margin
+    pos_min = std::min(0.0, profiler.TargetPosition) - 1.0;
+    pos_max = std::max(0.0, profiler.TargetPosition) + 1.0;
+    if (pos_min == pos_max) {
+        pos_min -= 1.0;
+        pos_max += 1.0;
     }
 
-    profiler.CurrentPosition += profiler.CurrentVelocity * deltaTime * profiler.direction;
+    // Velocity bounds - based on max velocity with margin
+    vel_min = -profiler.MaxVelocity * 0.1; // Allow small negative for deceleration
+    vel_max = profiler.MaxVelocity * 1.1;   // 10% margin
 
-    prev_cycle_time = discreteTime;
-    return nullptr;
+    // Acceleration bounds - based on max acceleration/deceleration with margin
+    acc_min = -profiler.MaxDeceleration * 1.1; // 10% margin for deceleration
+    acc_max = profiler.MaxAcceleration * 1.1;   // 10% margin for acceleration
 }
 
-// Periodic task
-void my_task()
-{
+void updateMotion(float dt) {
+    if (!is_running || profiler.stage == 0) return;
 
-    if (is_running && profiler.stage != 0)
-    {
-        positionGenerator();
-        // std::cout << "pos " << profiler.CurrentPosition << " vel " << profiler.CurrentVelocity << " acc " << profiler.CurrentAcceleration << " stage " << profiler.stage << std::endl;
-        positionPlot.addPoint(static_cast<float>(prev_cycle_time), static_cast<float>(profiler.CurrentPosition));
-        velocityPlot.addPoint(static_cast<float>(prev_cycle_time), static_cast<float>(profiler.CurrentVelocity));
-        accelerationPlot.addPoint(static_cast<float>(prev_cycle_time), static_cast<float>(profiler.CurrentAcceleration));
-    }
-
-}
-
-void start()
-{
-
-
-    // Reset profiler state
-    profiler.CurrentPosition = 0;
-    profiler.CurrentVelocity = 0;
-    profiler.CurrentAcceleration = 0;
-
-
-}
-
-void randomize()
-{
-    user_input.target_pos = posDist(rng);
-    user_input.max_vel = velDist(rng);
-    user_input.max_acc = accDist(rng);
-    user_input.max_dec = accDist(rng);
-    user_input.jerk = ((user_input.max_acc + user_input.max_dec) / 2.0) * 12.5;
-
-
-}
-
-void stop()
-{
-
-    // Clear graph data when stopping
-
-    // Reset profiler to idle state
-    profiler.stage = 0;
-    profiler.CurrentVelocity = 0;
-    profiler.CurrentAcceleration = 0;
-
-    std::cout << "Motion STOPPED - Graph cleared" << std::endl;
-}
-
-
-
-// --------------------------
-// Utility: Draw a sliding plot
-// --------------------------
-void drawPlot(const char *title, PlotBuffer &buffer, float scaleY)
-{
-    if (ImPlot::BeginPlot(title, ImVec2(-1, 0)))
-    {
-        // Calculate dynamic Y bounds
-        auto [minY, maxY] = buffer.getYBounds();
-
-        // Add some padding for clarity
-        float padding = (maxY - minY) * 0.1f;
-        if (padding < 0.001f)
-            padding = 0.1f;
-        minY -= padding;
-        maxY += padding;
-
-        // Setup axes dynamically
-        ImPlot::SetupAxes("Time", "Value");
-        ImPlot::SetupAxisLimits(ImAxis_X1, buffer.earliestTime(), buffer.latest_time, ImGuiCond_Always);
-        ImPlot::SetupAxisLimits(ImAxis_Y1, minY, maxY, ImGuiCond_Always);
-
-        // Draw circular buffer
-        if (buffer.full)
-        {
-            ImPlot::PlotLine("Signal",
-                             &buffer.x_data[buffer.index], &buffer.y_data[buffer.index],
-                             BUFFER_SIZE - buffer.index);
-            if (buffer.index > 0)
-            {
-                ImPlot::PlotLine("Signal",
-                                 buffer.x_data.data(), buffer.y_data.data(),
-                                 buffer.index);
+    // Simplified motion logic
+    switch (profiler.stage) {
+        case 1: // Acceleration phase
+            profiler.CurrentAcceleration = std::min(profiler.CurrentAcceleration + profiler.Jerk * dt, profiler.MaxAcceleration);
+            profiler.CurrentVelocity = std::min(profiler.CurrentVelocity + profiler.CurrentAcceleration * dt, profiler.MaxVelocity);
+            if (profiler.CurrentVelocity >= profiler.MaxVelocity) {
+                profiler.stage = 2;
             }
-        }
-        else
-        {
-            ImPlot::PlotLine("Signal",
-                             buffer.x_data.data(), buffer.y_data.data(),
-                             static_cast<int>(buffer.index));
-        }
+            break;
+        case 2: // Constant velocity
+            if (std::abs(profiler.CurrentPosition - profiler.TargetPosition) < 10.0) {
+                profiler.stage = 3;
+            }
+            break;
+        case 3: // Deceleration phase
+            profiler.CurrentAcceleration = std::max(profiler.CurrentAcceleration - profiler.Jerk * dt, -profiler.MaxDeceleration);
+            profiler.CurrentVelocity = std::max(profiler.CurrentVelocity + profiler.CurrentAcceleration * dt, 0.0);
+            if (profiler.CurrentVelocity <= 0.0) {
+                profiler.stage = 0;
+                profiler.CurrentPosition = profiler.TargetPosition;
+                is_running = false;
+            }
+            break;
+    }
 
-        ImPlot::EndPlot();
+    profiler.CurrentPosition += profiler.CurrentVelocity * dt;
+    
+    // Update data for plotting
+    current_time += dt;
+    
+    time_data.push_back(current_time);
+    position_data.push_back((float)profiler.CurrentPosition);
+    velocity_data.push_back((float)profiler.CurrentVelocity);
+    acceleration_data.push_back((float)profiler.CurrentAcceleration);
+    
+    // Keep data size manageable
+    if (time_data.size() > MAX_DATA_POINTS) {
+        time_data.erase(time_data.begin());
+        position_data.erase(position_data.begin());
+        velocity_data.erase(velocity_data.begin());
+        acceleration_data.erase(acceleration_data.begin());
     }
 }
 
-// --------------------------
-// GLFW error callback
-// --------------------------
-void glfw_error_callback(int error, const char *description)
-{
-    std::cerr << "GLFW Error " << error << ": " << description << std::endl;
+void startMotion() {
+    is_running = true;
+    profiler.stage = 1;
+    std::cout << "Motion started - Target: " << profiler.TargetPosition << std::endl;
 }
 
+void stopMotion() {
+    is_running = false;
+    profiler.stage = 0;
+    std::cout << "Motion stopped" << std::endl;
+}
 
+void randomizeParameters() {
+    std::uniform_real_distribution<double> pos_dist(-10.0, 10.0);
+    std::uniform_real_distribution<double> vel_dist(5.0, 30.0);
+    std::uniform_real_distribution<double> acc_dist(30.0, 100.0);
+    
+    profiler.TargetPosition = pos_dist(gen);
+    profiler.MaxVelocity = vel_dist(gen);
+    profiler.MaxAcceleration = acc_dist(gen);
+    profiler.MaxDeceleration = acc_dist(gen);
+    profiler.Jerk = (profiler.MaxAcceleration + profiler.MaxDeceleration) * 10.0;
+    
+    std::cout << "Parameters randomized" << std::endl;
+}
 
-// --------------------------
-// Main
-// --------------------------
-int main()
-{
-    // Setup GLFW
-    glfwSetErrorCallback(glfw_error_callback);
-    if (!glfwInit())
-    {
+void resetData() {
+    time_data.clear();
+    position_data.clear();
+    velocity_data.clear();
+    acceleration_data.clear();
+    current_time = 0.0f;
+    profiler.CurrentPosition = 0.0;
+    profiler.CurrentVelocity = 0.0;
+    profiler.CurrentAcceleration = 0.0;
+}
+
+int main() {
+    // Initialize GLFW
+    if (!glfwInit()) {
+        std::cerr << "Failed to initialize GLFW" << std::endl;
         return -1;
     }
 
-    // Create window using base dimensions
-    GLFWwindow *window = glfwCreateWindow((int)BASE_WIDTH, (int)BASE_HEIGHT,
-                                          "ImGui + ImPlot - Scaled Multi Plot Example", NULL, NULL);
-    if (!window)
-    {
+    // Daha uyumlu OpenGL sürümü
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // macOS için
+
+    // Create window with fixed size
+    GLFWwindow* window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, 
+                                         "Motion Control System", NULL, NULL);
+    
+    // Pencere oluşturulamazsa daha düşük OpenGL sürümü dene
+    if (!window) {
+        std::cout << "Failed to create window with OpenGL 3.2, trying compatible mode..." << std::endl;
+        
+        // Reset window hints
+        glfwDefaultWindowHints();
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+        
+        window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, 
+                                 "Motion Control System", NULL, NULL);
+    }
+
+    if (!window) {
+        std::cerr << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
         return -1;
     }
+    
     glfwMakeContextCurrent(window);
-    glfwSwapInterval(1);
+    glfwSwapInterval(1); // Enable vsync
 
-    // Setup ImGui
+    // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImPlot::CreateContext();
-
-    ImGuiIO &io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    ImGuiIO& io = ImGui::GetIO();
+    (void)io;
+    
+    // Setup style
     ImGui::StyleColorsDark();
 
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL2_Init();
+    // GLSL version detection
+    const char* glsl_version = "#version 150";
+    if (glfwGetWindowAttrib(window, GLFW_CONTEXT_VERSION_MAJOR) == 2) {
+        glsl_version = "#version 120";
+    }
+    
+    std::cout << "Using GLSL version: " << glsl_version << std::endl;
 
+    // Setup Platform/Renderer backends
+    if (!ImGui_ImplGlfw_InitForOpenGL(window, true)) {
+        std::cerr << "Failed to initialize ImGui GLFW backend" << std::endl;
+        return -1;
+    }
+    
+    if (!ImGui_ImplOpenGL3_Init(glsl_version)) {
+        std::cerr << "Failed to initialize ImGui OpenGL3 backend" << std::endl;
+        return -1;
+    }
 
-    std::thread([=]()
-                {
-        update_period(cycle_time_us);
-        run_periodic(my_task); })
-        .detach();
+    // Variables for timing
+    auto last_time = std::chrono::high_resolution_clock::now();
 
+    std::cout << "Application started successfully!" << std::endl;
 
-    // Main Loop
-    while (!glfwWindowShouldClose(window))
-    {
+    // Main loop
+    while (!glfwWindowShouldClose(window)) {
+        // Calculate delta time
+        auto current_time_point = std::chrono::high_resolution_clock::now();
+        float dt = std::chrono::duration<float>(current_time_point - last_time).count();
+        last_time = current_time_point;
+
+        // Poll events
         glfwPollEvents();
 
-        // Get window size to compute scale factors
-        int windowWidth, windowHeight;
-        glfwGetWindowSize(window, &windowWidth, &windowHeight);
-        float scaleX = getScaleFactorX((float)windowWidth);
-        float scaleY = getScaleFactorY((float)windowHeight);
-
-        // Scale fonts dynamically
-        io.FontGlobalScale = std::min(scaleX, scaleY);
-
-        // Start new ImGui frame
-        ImGui_ImplOpenGL2_NewFrame();
+        // Start Dear ImGui frame
+        ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        ImGui::Begin("Motion Parameters");
+        // Update motion physics
+        updateMotion(dt);
 
-        ImGui::InputDouble("Target Position", &user_input.target_pos, 0.1, 1.0, "%.3f");
-        ImGui::InputDouble("Max Velocity", &user_input.max_vel, 0.1, 1.0, "%.3f");
-        ImGui::InputDouble("Max Accel", &user_input.max_acc, 0.1, 1.0, "%.3f");
-        ImGui::InputDouble("Max Decel", &user_input.max_dec, 0.1, 1.0, "%.3f");
-        ImGui::InputDouble("Jerk", &user_input.jerk, 1.0, 10.0, "%.3f");
+        // Calculate plot bounds based on current input parameters
+        double pos_min, pos_max, vel_min, vel_max, acc_min, acc_max;
+        calculatePlotBounds(pos_min, pos_max, vel_min, vel_max, acc_min, acc_max);
 
+        // Main control window - left side
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImVec2(400, WINDOW_HEIGHT));
+        if (ImGui::Begin("Control Panel", nullptr, 
+                    ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | 
+                    ImGuiWindowFlags_NoCollapse)) {
 
-        ImGui::End();
+            ImGui::Text("Motion Parameters");
+            ImGui::Separator();
+            
+            // Input fields
+            ImGui::InputDouble("Target Position", &profiler.TargetPosition, 0.1, 1.0, "%.3f");
+            ImGui::InputDouble("Max Velocity", &profiler.MaxVelocity, 0.1, 1.0, "%.3f");
+            ImGui::InputDouble("Max Acceleration", &profiler.MaxAcceleration, 1.0, 10.0, "%.3f");
+            ImGui::InputDouble("Max Deceleration", &profiler.MaxDeceleration, 1.0, 10.0, "%.3f");
+            ImGui::InputDouble("Jerk", &profiler.Jerk, 10.0, 100.0, "%.3f");
 
-        ImGui::Begin("Main Window");
-        // --------------------------
-        // Control Panel
-        // --------------------------
-        if (ImGui::Button("Restart", ImVec2(100 * scaleX, 40 * scaleY)))
-        {
-            // Stop current run
-            is_running = false;
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
 
-            // Reset profiler state
-            profiler.CurrentPosition = 0.0;
-            profiler.CurrentVelocity = 0.0;
-            profiler.CurrentAcceleration = 0.0;
+            // Control buttons
+            if (ImGui::Button("START", ImVec2(120, 40))) {
+                startMotion();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("STOP", ImVec2(120, 40))) {
+                stopMotion();
+            }
+            
+            ImGui::Spacing();
+            
+            if (ImGui::Button("RANDOMIZE", ImVec2(120, 40))) {
+                randomizeParameters();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("RESET DATA", ImVec2(120, 40))) {
+                resetData();
+            }
 
-            // Clear all graphs
-            positionPlot = PlotBuffer();
-            velocityPlot = PlotBuffer();
-            accelerationPlot = PlotBuffer();
-            deltaTime = 0.0;
-            prev_cycle_time = 0.0;
-            // Apply parameters
-            profiler.TargetPosition = user_input.target_pos;
-            profiler.MaxVelocity = user_input.max_vel;
-            profiler.MaxAcceleration = user_input.max_acc;
-            profiler.MaxDeceleration = user_input.max_dec;
-            profiler.Jerk = user_input.jerk;
-            profiler.TargetDistance = std::fabs(profiler.TargetPosition - profiler.CurrentPosition);
-            profiler.direction = (profiler.TargetPosition - profiler.CurrentPosition < 0) ? -1 : 1;
-            profiler.CalculatePositionProfile();
-            profiler.begin = std::chrono::high_resolution_clock::now();
-            profiler.stage = 10;
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
 
-            // Start motion again
-            is_running = true;
+            // Status information
+            ImGui::Text("Status: %s", is_running ? "RUNNING" : "STOPPED");
+            ImGui::Text("Stage: %d", profiler.stage);
+            ImGui::Text("Position: %.3f", profiler.CurrentPosition);
+            ImGui::Text("Velocity: %.3f", profiler.CurrentVelocity);
+            ImGui::Text("Acceleration: %.3f", profiler.CurrentAcceleration);
 
-            std::cout << "Motion RESTARTED with cleared graphs and parameters:" << std::endl;
-            std::cout << "  Target Position: " << user_input.target_pos << std::endl;
-            std::cout << "  Max Velocity: " << user_input.max_vel << std::endl;
-            std::cout << "  Max Acceleration: " << user_input.max_acc << std::endl;
-            std::cout << "  Max Deceleration: " << user_input.max_dec << std::endl;
-            std::cout << "  Jerk: " << user_input.jerk << std::endl;
+            // Show current plot bounds
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Text("Plot Ranges:");
+            ImGui::Text("Position: [%.1f, %.1f]", pos_min, pos_max);
+            ImGui::Text("Velocity: [%.1f, %.1f]", vel_min, vel_max);
+            ImGui::Text("Acceleration: [%.1f, %.1f]", acc_min, acc_max);
+
+            ImGui::End();
         }
 
-        ImGui::SameLine();
-        if (ImGui::Button("Stop", ImVec2(100 * scaleX, 40 * scaleY)))
-        {
-            is_running = false;
+        // Plot window - right side
+        ImGui::SetNextWindowPos(ImVec2(400, 0));
+        ImGui::SetNextWindowSize(ImVec2(WINDOW_WIDTH - 400, WINDOW_HEIGHT));
+        if (ImGui::Begin("Motion Plots", nullptr, 
+                    ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | 
+                    ImGuiWindowFlags_NoCollapse)) {
+
+            // Calculate time window for X-axis (show last 10 seconds or all data)
+            float time_min = 0.0f;
+            float time_max = current_time;
+            if (current_time > 10.0f) {
+                time_min = current_time - 10.0f; // Show last 10 seconds
+            }
+
+            // Position plot
+            if (ImPlot::BeginPlot("Position", ImVec2(-1, 250))) {
+                ImPlot::SetupAxes("Time (s)", "Position");
+                ImPlot::SetupAxisLimits(ImAxis_X1, time_min, time_max, ImGuiCond_Always);
+                ImPlot::SetupAxisLimits(ImAxis_Y1, pos_min, pos_max, ImGuiCond_Always);
+                if (!time_data.empty() && !position_data.empty()) {
+                    ImPlot::PlotLine("Position", time_data.data(), position_data.data(), time_data.size());
+                }
+                // Add reference lines
+                ImPlot::SetNextLineStyle(ImVec4(1, 0, 0, 0.5f), 2.0f);
+                ImPlot::PlotLine("Target", &time_min, &profiler.TargetPosition, 2, 0);
+                ImPlot::EndPlot();
+            }
+
+            // Velocity plot
+            if (ImPlot::BeginPlot("Velocity", ImVec2(-1, 250))) {
+                ImPlot::SetupAxes("Time (s)", "Velocity");
+                ImPlot::SetupAxisLimits(ImAxis_X1, time_min, time_max, ImGuiCond_Always);
+                ImPlot::SetupAxisLimits(ImAxis_Y1, vel_min, vel_max, ImGuiCond_Always);
+                if (!time_data.empty() && !velocity_data.empty()) {
+                    ImPlot::PlotLine("Velocity", time_data.data(), velocity_data.data(), time_data.size());
+                }
+                // Add reference lines
+                ImPlot::SetNextLineStyle(ImVec4(1, 0, 0, 0.5f), 2.0f);
+                ImPlot::PlotLine("Max Vel", &time_min, &profiler.MaxVelocity, 2, 0);
+                ImPlot::EndPlot();
+            }
+
+            // Acceleration plot
+            if (ImPlot::BeginPlot("Acceleration", ImVec2(-1, 250))) {
+                ImPlot::SetupAxes("Time (s)", "Acceleration");
+                ImPlot::SetupAxisLimits(ImAxis_X1, time_min, time_max, ImGuiCond_Always);
+                ImPlot::SetupAxisLimits(ImAxis_Y1, acc_min, acc_max, ImGuiCond_Always);
+                if (!time_data.empty() && !acceleration_data.empty()) {
+                    ImPlot::PlotLine("Acceleration", time_data.data(), acceleration_data.data(), time_data.size());
+                }
+                // Add reference lines
+                ImPlot::SetNextLineStyle(ImVec4(1, 0, 0, 0.5f), 2.0f);
+                ImPlot::PlotLine("Max Acc", &time_min, &profiler.MaxAcceleration, 2, 0);
+                ImPlot::SetNextLineStyle(ImVec4(1, 0, 0, 0.5f), 2.0f);
+                ImPlot::PlotLine("Max Dec", &time_min, &profiler.MaxDeceleration, 2, 0);
+                ImPlot::EndPlot();
+            }
+
+            ImGui::End();
         }
-        ImGui::SameLine();
-        if (ImGui::Button("Randomize", ImVec2(120 * scaleX, 40 * scaleY)))
-        {
-            randomize();
-        }
 
-
-        ImGui::Separator();
-
-        // --------------------------
-        // Dynamic space allocation for 3 plots
-        // --------------------------
-        ImVec2 available = ImGui::GetContentRegionAvail();
-        float total_height = available.y;
-        float plot_height = (total_height) / 3.50f;
-
-        // Draw Position plot
-        ImGui::Text("Position");
-        ImGui::BeginChild("PositionPlot", ImVec2(available.x, plot_height), true);
-        drawPlot("Position", positionPlot, scaleY);
-        ImGui::EndChild();
-
-        ImGui::Spacing();
-
-        // Draw Velocity plot
-        ImGui::Text("Velocity");
-        ImGui::BeginChild("VelocityPlot", ImVec2(available.x, plot_height), true);
-        drawPlot("Velocity", velocityPlot, scaleY);
-        ImGui::EndChild();
-
-        ImGui::Spacing();
-
-        // Draw Acceleration plot
-        ImGui::Text("Acceleration");
-        ImGui::BeginChild("AccelerationPlot", ImVec2(available.x, plot_height), true);
-        drawPlot("Acceleration", accelerationPlot, scaleY);
-        ImGui::EndChild();
-
-        ImGui::End();
-
-
-        // --------------------------
         // Rendering
-        // --------------------------
         ImGui::Render();
-        glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
+        int display_w, display_h;
+        glfwGetFramebufferSize(window, &display_w, &display_h);
+        glViewport(0, 0, display_w, display_h);
+        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
-        ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         glfwSwapBuffers(window);
     }
 
     // Cleanup
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
     ImPlot::DestroyContext();
     ImGui::DestroyContext();
-    ImGui_ImplOpenGL2_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
+
     glfwDestroyWindow(window);
     glfwTerminate();
 

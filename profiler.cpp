@@ -286,7 +286,8 @@ void Profiler::CalculateShorterProfile()
         double c = (0.5f * a11_modified_t2 * std::pow(t13, 2) +
                     (0.16667f * Jerk * std::pow(t13, 3)) - need_distance);
 
-        bool solved = solveQuadratic(a11_modified_t2 * 0.5f, (v11_modified_t2 + (a11_modified_t2 * t13)), c, t12_1, t12_2);
+        bool solved = solveQuadratic(a11_modified_t2 * 0.5f, 
+            (v11_modified_t2 + (a11_modified_t2 * t13)), c, t12_1, t12_2);
 
         if (solved)
         {
@@ -339,31 +340,23 @@ void Profiler::CalculateShorterProfile()
             t22 = result[0];
             t12 = result[1];
 
-            x12 = (v11 * t12) +
-                                           (0.5f * a11 * std::pow(t12, 2));
+            x12 = (v11 * t12) + (0.5f * a11 * std::pow(t12, 2));
             v12 = (v11 + (a11 * t12));
             a12 = a11;
-            x13 = (v12 * t13) +
-                                           (0.5f * a12 * std::pow(t13, 2)) -
-                                           (0.16667f * Jerk * std::pow(t13, 3));
-            v13 = (v12 + (a12 * t13)) -
-                                           (0.5f * Jerk * std::pow(t13, 2));
+            x13 = (v12 * t13) + (0.5f * a12 * std::pow(t13, 2)) -
+                                (0.16667f * Jerk * std::pow(t13, 3));
+            v13 = (v12 + (a12 * t13)) - (0.5f * Jerk * std::pow(t13, 2));
             a13 = (a12 - (Jerk * t13));
             //---------------------falling--------------------------
-            x21 = (v13 * t21) -
-                                           (0.16667f * Jerk * std::pow(t21, 3));
-            v21 = (v13 -
-                                            (0.5f * Jerk * std::pow(t21, 2)));
+            x21 = (v13 * t21) - (0.16667f * Jerk * std::pow(t21, 3));
+            v21 = (v13 - (0.5f * Jerk * std::pow(t21, 2)));
             a21 = -(Jerk * t21);
-            x22 = (v21 * t22) +
-                                           (0.5f * a21 * std::pow(t22, 2));
+            x22 = (v21 * t22) + (0.5f * a21 * std::pow(t22, 2));
             v22 = (v21 + (a21 * t22));
             a22 = a21;
-            x23 = (v22 * t23) +
-                                           (0.5f * a22 * std::pow(t23, 2)) +
-                                           (0.16667f * Jerk * std::pow(t23, 3));
-            v23 = (v22 + (a22 * t23)) +
-                                           (0.5f * Jerk * std::pow(t23, 2));
+            x23 = (v22 * t23) + (0.5f * a22 * std::pow(t23, 2)) +
+                                (0.16667f * Jerk * std::pow(t23, 3));
+            v23 = (v22 + (a22 * t23)) + (0.5f * Jerk * std::pow(t23, 2));
             a23 = (a22 + (Jerk * t23));
 
         }
@@ -413,24 +406,19 @@ void Profiler::CalculateShorterProfile()
                 t23 = t21;
                 t22 = 0.0f;
 
-                x12 = (v11 * t12) + (0.5f * a11 *
-                                                                                                                std::pow(t12, 2));
+                x12 = (v11 * t12) + (0.5f * a11 * std::pow(t12, 2));
                 v12 = (v11 + (a11 * t12));
                 a12 = a11;
 
-                x13 = (v12 * t13) +
-                                               (0.5f * a12 * std::pow(t13, 2)) -
-                                               (0.16667f * Jerk * std::pow(t13, 3));
+                x13 = (v12 * t13) + (0.5f * a12 * std::pow(t13, 2)) -
+                                    (0.16667f * Jerk * std::pow(t13, 3));
 
                 a13 = (a12 - (Jerk * t13));
 
-                v13 = (v12 + (a12 * t13)) -
-                                               (0.5f * Jerk * std::pow(t13, 2));
+                v13 = (v12 + (a12 * t13)) - (0.5f * Jerk * std::pow(t13, 2));
 
-                x21 = (v13 * t21) -
-                                               (0.16667f * Jerk * std::pow(t21, 3));
-                v21 = (v13 - (0.5f * Jerk *
-                                                                                std::pow(t21, 2)));
+                x21 = (v13 * t21) - (0.16667f * Jerk * std::pow(t21, 3));
+                v21 = (v13 - (0.5f * Jerk * std::pow(t21, 2)));
                 a21 = -(Jerk * t21);
 
                 x22 = 0.0f;
@@ -456,24 +444,21 @@ void Profiler::CalculateShorterProfile()
             else
             {
                 std::cout << "Target position is not enough to reach max acceleration from both side" << std::endl;
-                double t_calculated = std::cbrt((TargetDistance) /
-                                                (2 * Jerk));
+                double t_calculated = std::cbrt((TargetDistance) / (2 * Jerk));
+
                 x11 = (0.16667f * Jerk * std::pow(t_calculated, 3)) +
-                                               (0.5f * CurrentAcceleration * std::pow(t_calculated, 2)) +
-                                               (CurrentVelocity * t_calculated);
-                v11 = (CurrentVelocity +
-                                                (CurrentAcceleration * t_calculated) +
-                                                (0.5f * Jerk * std::pow(t_calculated, 2)));
-                a11 = (CurrentAcceleration +
-                                                (Jerk * t_calculated));
+                        (0.5f * CurrentAcceleration * std::pow(t_calculated, 2)) +
+                        (CurrentVelocity * t_calculated);
+
+                v11 = (CurrentVelocity + (CurrentAcceleration * t_calculated) +
+                                        (0.5f * Jerk * std::pow(t_calculated, 2)));
+                a11 = (CurrentAcceleration + (Jerk * t_calculated));
                 x12 = 0.0f;
                 v12 = v11;
                 a12 = a11;
-                x13 = (v11 * t_calculated) +
-                                               (0.5f * a11 * std::pow(t_calculated, 2)) -
-                                               (0.16667f * Jerk * std::pow(t_calculated, 3));
-                v13 = (v11 + (a11 * t_calculated)) -
-                                               (0.5f * Jerk * std::pow(t_calculated, 2));
+                x13 = (v11 * t_calculated) + (0.5f * a11 * std::pow(t_calculated, 2)) -
+                                            (0.16667f * Jerk * std::pow(t_calculated, 3));
+                v13 = (v11 + (a11 * t_calculated)) - (0.5f * Jerk * std::pow(t_calculated, 2));
                 a13 = (a11 + (Jerk * t_calculated));
 
                 x21 = (v13 * t_calculated) - (0.16667f * Jerk * std::pow(t_calculated, 3));
@@ -482,11 +467,9 @@ void Profiler::CalculateShorterProfile()
                 x22 = 0.0f;
                 v22 = v21;
                 a22 = a21;
-                x23 = (v22 * t_calculated) +
-                                               (0.5f * a22 * std::pow(t_calculated, 2)) +
+                x23 = (v22 * t_calculated) + (0.5f * a22 * std::pow(t_calculated, 2)) +
                                                (0.16667f * Jerk * std::pow(t_calculated, 3));
-                v23 = (v22 + (a22 * t_calculated)) +
-                                               (0.5f * Jerk * std::pow(t_calculated, 2));
+                v23 = (v22 + (a22 * t_calculated)) + (0.5f * Jerk * std::pow(t_calculated, 2));
                 a23 = (a22 + (Jerk * t_calculated));
             }
         }
@@ -509,7 +492,8 @@ void Profiler::CalculateShorterProfile()
         double c = (0.5f * a21_modified_t2 * std::pow(t23, 2) +
                     (0.16667f * Jerk * std::pow(t23, 3)) - need_distance);
 
-        bool solved = solveQuadratic(a21_modified_t2 * 0.5f, (v21_modified_t2 + (a21_modified_t2 * t23)), c, t22_1, t22_2);
+        bool solved = solveQuadratic(a21_modified_t2 * 0.5f, 
+            (v21_modified_t2 + (a21_modified_t2 * t23)), c, t22_1, t22_2);
 
         if (solved)
         {
@@ -560,31 +544,23 @@ void Profiler::CalculateShorterProfile()
             t22 = result[0];
             t12 = result[1];
 
-            x12 = (v11 * t12) +
-                                           (0.5f * a11 * std::pow(t12, 2));
+            x12 = (v11 * t12) + (0.5f * a11 * std::pow(t12, 2));
             v12 = (v11 + (a11 * t12));
             a12 = a11;
-            x13 = (v12 * t13) +
-                                           (0.5f * a12 * std::pow(t13, 2)) -
+            x13 = (v12 * t13) + (0.5f * a12 * std::pow(t13, 2)) -
                                            (0.16667f * Jerk * std::pow(t13, 3));
-            v13 = (v12 + (a12 * t13)) -
-                                           (0.5f * Jerk * std::pow(t13, 2));
+            v13 = (v12 + (a12 * t13)) - (0.5f * Jerk * std::pow(t13, 2));
             a13 = (a12 - (Jerk * t13));
             //---------------------falling--------------------------
-            x21 = (v13 * t21) -
-                                           (0.16667f * Jerk * std::pow(t21, 3));
-            v21 = (v13 -
-                                            (0.5f * Jerk * std::pow(t21, 2)));
+            x21 = (v13 * t21) - (0.16667f * Jerk * std::pow(t21, 3));
+            v21 = (v13 - (0.5f * Jerk * std::pow(t21, 2)));
             a21 = -(Jerk * t21);
-            x22 = (v21 * t22) +
-                                           (0.5f * a21 * std::pow(t22, 2));
+            x22 = (v21 * t22) + (0.5f * a21 * std::pow(t22, 2));
             v22 = (v21 + (a21 * t22));
             a22 = a21;
-            x23 = (v22 * t23) +
-                                           (0.5f * a22 * std::pow(t23, 2)) +
+            x23 = (v22 * t23) + (0.5f * a22 * std::pow(t23, 2)) +
                                            (0.16667f * Jerk * std::pow(t23, 3));
-            v23 = (v22 + (a22 * t23)) +
-                                           (0.5f * Jerk * std::pow(t23, 2));
+            v23 = (v22 + (a22 * t23)) + (0.5f * Jerk * std::pow(t23, 2));
             a23 = (a22 + (Jerk * t23));
         }
         else
@@ -628,39 +604,33 @@ void Profiler::CalculateShorterProfile()
                 x11 = (0.16667f * Jerk * std::pow(t11, 3)) +
                                                (0.5f * CurrentAcceleration * std::pow(t11, 2)) +
                                                (CurrentVelocity * t11);
-                v11 = (CurrentVelocity +
-                                                (CurrentAcceleration * t11) +
-                                                (0.5f * Jerk * std::pow(t11, 2)));
-                a11 = (CurrentAcceleration +
-                                                (Jerk * t11));
+
+                v11 = (CurrentVelocity + (CurrentAcceleration * t11) +
+                                        (0.5f * Jerk * std::pow(t11, 2)));
+
+                a11 = (CurrentAcceleration + (Jerk * t11));
 
                 x12 = 0.0f;
                 v12 = v11;
                 a12 = a11;
 
-                x13 = (v12 * t13) +
-                                               (0.5f * a12 * std::pow(t13, 2)) -
+                x13 = (v12 * t13) + (0.5f * a12 * std::pow(t13, 2)) -
                                                (0.16667f * Jerk * std::pow(t13, 3));
                 a13 = (a12 - (Jerk * t13));
-                v13 = (v12 + (a12 * t13)) -
-                                               (0.5f * Jerk * std::pow(t13, 2));
+                v13 = (v12 + (a12 * t13)) - (0.5f * Jerk * std::pow(t13, 2));
 
-                x21 = (v13 * t21) -
-                                               (0.16667f * Jerk * std::pow(t21, 3));
+                x21 = (v13 * t21) - (0.16667f * Jerk * std::pow(t21, 3));
                 v21 = (v13 - (0.5f * Jerk * std::pow(t21, 2)));
                 a21 = -(Jerk * t21);
 
-                x22 = (v21 * t22) +
-                                               (0.5f * a21 * std::pow(t22, 2));
+                x22 = (v21 * t22) + (0.5f * a21 * std::pow(t22, 2));
                 v22 = (v21 + (a21 * t22));
                 a22 = a21;
 
-                x23 = (v22 * t23) +
-                                               (0.5f * a22 * std::pow(t23, 2)) +
+                x23 = (v22 * t23) + (0.5f * a22 * std::pow(t23, 2)) +
                                                (0.16667f * Jerk * std::pow(t23, 3));
 
-                v23 = (v22 + (a22 * t23)) +
-                                               (0.5f * Jerk * std::pow(t23, 2));
+                v23 = (v22 + (a22 * t23)) + (0.5f * Jerk * std::pow(t23, 2));
                 a23 = (a22 + (Jerk * t23));
 
             }
@@ -705,6 +675,8 @@ void Profiler::CalculateShorterProfile()
     }
     else
     {
+
+
     }
 }
 
@@ -724,276 +696,340 @@ void Profiler::CalculatePositionProfile()
 
     t23 = (MaxDeceleration / Jerk);
 
-    // in case of max acceleration value will be reached with t1 but max velocity will NOT be reached
-    if (t12 <= 0.0f && t22 >= 0.0f)
+    if (t21 > t11)
     {
-        std::cout << "----------------------------  CASE 2 ----------------------------" << std::endl;
-
-        t11 = std::sqrt((MaxVelocity - CurrentVelocity) / Jerk);
-        t12 = 0.0f;
-        t13 = std::sqrt(MaxVelocity / Jerk);
-
-        t21 = (MaxDeceleration) / Jerk;
-
-        t22 = ((MaxVelocity - CurrentVelocity) - (MaxDeceleration * t21)) / MaxDeceleration;
-
-        t23 = (MaxDeceleration / Jerk);
-
-        x11 = (0.16667f * Jerk * std::pow(t11, 3)) +
-                                       (0.5f * CurrentAcceleration * std::pow(t11, 2)) +
-                                       (CurrentVelocity * t11);
-
-        v11 = (CurrentVelocity +
-                                        (CurrentAcceleration * t11) +
-                                        (0.5f * Jerk * std::pow(t11, 2)));
-
-        a11 = (CurrentAcceleration +
-                                        (Jerk * t11));
-
-        x12 = (v11 * t12) +
-                                       (0.5f * a11 * std::pow(t12, 2));
-
-        v12 = (v11 + (a11 * t12));
-
-        a12 = a11;
-
-        x13 = (v12 * t13) +
-                                       (0.5f * a12 * std::pow(t13, 2)) -
-                                       (0.16667f * Jerk * std::pow(t13, 3));
-
-        v13 = (v12 + (a12 * t13)) -
-                                       (0.5f * Jerk * std::pow(t13, 2));
-
-        a13 = (a12 + (Jerk * t13));
-
-        x21 = (MaxVelocity * t21) -
-                                       (0.16667f * Jerk * std::pow(t21, 3));
-
-        v21 = (MaxVelocity -
-                                        (0.5f * Jerk * std::pow(t21, 2)));
-
-        a21 = -(Jerk * t21);
-
-        x22 = (v21 * t22) +
-                                       (0.5f * a21 * std::pow(t22, 2));
-
-        v22 = (v21 + (a21 * t22));
-
-        a22 = a21;
-
-        x23 = (v22 * t23) +
-                                       (0.5f * a22 * std::pow(t23, 2)) +
-                                       (0.16667f * Jerk * std::pow(t23, 3));
-
-        v23 = (v22 + (a22 * t23)) +
-                                       (0.5f * Jerk * std::pow(t23, 2));
-
-        a23 = (a22 + (Jerk * t23));
-
-        std::cout << "full profile distance: " << (x11 + x12 + x13 + x21 + x22 + x23) << std::endl;
-
-        if ((TargetDistance) >= (x11 + x12 +
-                                                          x13 + x21 + x22 + x23))
+        if (t12 <= 0.0f && t22 >= 0.0f)
         {
-            std::cout << "Target position is enough to reach full profile" << std::endl;
+            // rising without t12
+            double x11_modified_t2 = (0.16667f * Jerk * std::pow(t11, 3)) +
+                                    (0.5f * CurrentAcceleration * std::pow(t11, 2)) +
+                                    (CurrentVelocity * t11);
+    
+            double v11_modified_t2 = (CurrentVelocity +
+                                    (CurrentAcceleration * t11) +
+                                    (0.5f * Jerk * std::pow(t11, 2)));
+            double a11_modified_t2 = (CurrentAcceleration +
+                                    (Jerk * t11));
+
+            double x13_modified_t2 = (v11_modified_t2 * t13) +
+                                     (0.5f * a11_modified_t2 * std::pow(t13, 2)) -
+                                     (0.16667f * Jerk * std::pow(t13, 3));
+            double v13_modified_t2 = (v11_modified_t2 + (a11_modified_t2 * t13)) -
+                                     (0.5f * Jerk * std::pow(t13, 2));
+            double a13_modified_t2 = (a11_modified_t2 + (Jerk * t13));
+            //falling with t22
+            x21 = (MaxVelocity * t21) - (0.16667f * Jerk * std::pow(t21, 3));
+
+            v21 = (MaxVelocity - (0.5f * Jerk * std::pow(t21, 2)));
+
+            a21 = -(Jerk * t21);
+
+            x22 = (v21 * t22) + (0.5f * a21 * std::pow(t22, 2));
+
+            v22 = (v21 + (a21 * t22));
+
+            a22 = a21;
+
+            x23 = (v22 * t23) + (0.5f * a22 * std::pow(t23, 2)) +
+                                (0.16667f * Jerk * std::pow(t23, 3));
+
+            v23 = (v22 + (a22 * t23)) + (0.5f * Jerk * std::pow(t23, 2));
+
+            a23 = (a22 + (Jerk * t23));
+
+            double total_distance = (x11_modified_t2 + x13_modified_t2 +
+                                     x21 + x22 + x23);
+
+            std::cout << "total_distance: " << total_distance << std::endl;
+
+            
+
+        }
+        else if (t12 <= 0.0f && t22 <= 0.0f)
+        {
+
+        }
+        else if (t12 <= 0.0f && t22 <= 0.0f)
+        {
+            
         }
         else
         {
-            CalculateShorterProfile();
+            double need_distance = (Jerk * std::pow(t21, 3));
+    
+            double x11_modified_t2 = (0.16667f * Jerk * std::pow(t11, 3)) +
+                                    (0.5f * CurrentAcceleration * std::pow(t11, 2)) +
+                                    (CurrentVelocity * t11);
+    
+            double v11_modified_t2 = (CurrentVelocity +
+                                    (CurrentAcceleration * t11) +
+                                    (0.5f * Jerk * std::pow(t11, 2)));
+            double a11_modified_t2 = (CurrentAcceleration +
+                                    (Jerk * t11));
+    
+            double t12_1, t12_2;
+            double c = (0.5f * a11_modified_t2 * std::pow(t13, 2) +
+                        (0.16667f * Jerk * std::pow(t13, 3)) - need_distance);
+    
+            bool solved = solveQuadratic(a11_modified_t2 * 0.5f,
+                                        (v11_modified_t2 + (a11_modified_t2 * t13)), c, t12_1, t12_2);
+    
+            if (solved)
+            {
+                t12 = std::max(t12_1, t12_2);
+            }
+    
+            double x12_modified_t2 = (v11_modified_t2 * t12) +
+                                    (0.5f * a11_modified_t2 * std::pow(t12, 2));
+    
+            double v12_modified_t2 = (v11_modified_t2 + (a11_modified_t2 * t12));
+            double a12_modified_t2 = a11_modified_t2;
+    
+            double x13_modified_t2 = (v12_modified_t2 * t13) +
+                                    (0.5f * a12_modified_t2 * std::pow(t13, 2)) -
+                                    (0.16667f * Jerk * std::pow(t13, 3));
+            double v13_modified_t2 = (v12_modified_t2 + (a12_modified_t2 * t13)) -
+                                    (0.5f * Jerk * std::pow(t13, 2));
+            double a13_modified_t2 = (a12_modified_t2 + (Jerk * t13));
+    
+            double min_distance1 = (x11_modified_t2 + x12_modified_t2 + x13_modified_t2 + need_distance);
+
+            std::cout << "min_distance1: " << min_distance1 << std::endl;
         }
+
+
     }
-    else if (t22 <= 0.0f && t12 >= 0.0f)
-    {
-        std::cout << "----------------------------  CASE 3 ----------------------------" << std::endl;
-        t21 = std::sqrt((MaxVelocity - CurrentVelocity) / Jerk);
-        t22 = 0.0f;
-        t23 = std::sqrt(MaxVelocity / Jerk);
 
-        x11 = (0.16667f * Jerk * std::pow(t11, 3)) +
-                                       (0.5f * CurrentAcceleration * std::pow(t11, 2)) +
-                                       (CurrentVelocity * t11);
+    //     // in case of max acceleration value will be reached with t1 but max velocity will NOT be reached
+    //     if (t12 <= 0.0f && t22 >= 0.0f)
+    //     {
+    //         std::cout << "----------------------------  CASE 2 ----------------------------" << std::endl;
 
-        v11 = (CurrentVelocity +
-                                        (CurrentAcceleration * t11) +
-                                        (0.5f * Jerk * std::pow(t11, 2)));
+    //         t11 = std::sqrt((MaxVelocity - CurrentVelocity) / Jerk);
+    //         t12 = 0.0f;
+    //         t13 = std::sqrt(MaxVelocity / Jerk);
 
-        a11 = (CurrentAcceleration +
-                                        (Jerk * t11));
+    //         t21 = (MaxDeceleration) / Jerk;
 
-        x12 = (v11 * t12) +
-                                       (0.5f * a11 * std::pow(t12, 2));
+    //         t22 = ((MaxVelocity - CurrentVelocity) - (MaxDeceleration * t21)) / MaxDeceleration;
 
-        v12 = (v11 + (a11 * t12));
+    //         t23 = (MaxDeceleration / Jerk);
 
-        a12 = a11;
+    //         x11 = (0.16667f * Jerk * std::pow(t11, 3)) +
+    //                                        (0.5f * CurrentAcceleration * std::pow(t11, 2)) +
+    //                                        (CurrentVelocity * t11);
 
-        x13 = (v12 * t13) +
-                                       (0.5f * a12 * std::pow(t13, 2)) -
-                                       (0.16667f * Jerk * std::pow(t13, 3));
+    //         v11 = (CurrentVelocity + (CurrentAcceleration * t11) +
+    //                                         (0.5f * Jerk * std::pow(t11, 2)));
 
-        v13 = (v12 + (a12 * t13)) -
-                                       (0.5f * Jerk * std::pow(t13, 2));
+    //         a11 = (CurrentAcceleration + (Jerk * t11));
 
-        a13 = (a12 + (Jerk * t13));
+    //         x12 = (v11 * t12) + (0.5f * a11 * std::pow(t12, 2));
 
-        x21 = (v13 * t21) -
-                                       (0.16667f * Jerk * std::pow(t21, 3));
-        v21 = (v13 - (0.5f * Jerk * std::pow(t21, 2)));
-        a21 = -(Jerk * t21);
-        x22 = 0.0f;
-        v22 = v21;
-        a22 = a21;
-        x23 = (v22 * t23) +
-                                       (0.5f * a22 * std::pow(t23, 2)) +
-                                       (0.16667f * Jerk * std::pow(t23, 3));
-        v23 = (v22 + (a22 * t23)) +
-                                       (0.5f * Jerk * std::pow(t23, 2));
-        a23 = (a22 + (Jerk * t23));
+    //         v12 = (v11 + (a11 * t12));
 
-        if ((TargetDistance) >= (x11 + x12 +
-                                                          x13 + x21 + x22 + x23))
-        {
-            std::cout << "Target position is enough to reach full profile" << std::endl;
-        }
-        else
-        {
-            CalculateShorterProfile();
-        }
-    }
-    else if (t12 <= 0.0f && t22 <= 0.0f)
-    {
-        std::cout << "----------------------------  CASE 4 ----------------------------" << std::endl;
-        t11 = std::sqrt((MaxVelocity - CurrentVelocity) / Jerk);
-        t12 = 0.0f;
-        t13 = std::sqrt(MaxVelocity / Jerk);
-        t21 = std::sqrt((MaxVelocity - CurrentVelocity) / Jerk);
-        t22 = 0.0f;
-        t23 = std::sqrt(MaxVelocity / Jerk);
-        x11 = (0.16667f * Jerk * std::pow(t11, 3)) +
-                                       (0.5f * CurrentAcceleration * std::pow(t11, 2)) +
-                                       (CurrentVelocity * t11);
+    //         a12 = a11;
 
-        v11 = (CurrentVelocity +
-                                        (CurrentAcceleration * t11) +
-                                        (0.5f * Jerk * std::pow(t11, 2)));
+    //         x13 = (v12 * t13) + (0.5f * a12 * std::pow(t13, 2)) -
+    //                             (0.16667f * Jerk * std::pow(t13, 3));
 
-        a11 = (CurrentAcceleration +
-                                        (Jerk * t11));
+    //         v13 = (v12 + (a12 * t13)) - (0.5f * Jerk * std::pow(t13, 2));
 
-        x12 = (v11 * t12) +
-                                       (0.5f * a11 * std::pow(t12, 2));
+    //         a13 = (a12 - (Jerk * t13));
 
-        v12 = (v11 + (a11 * t12));
+    //         x21 = (MaxVelocity * t21) - (0.16667f * Jerk * std::pow(t21, 3));
 
-        a12 = a11;
+    //         v21 = (MaxVelocity - (0.5f * Jerk * std::pow(t21, 2)));
 
-        x13 = (v12 * t13) +
-                                       (0.5f * a12 * std::pow(t13, 2)) -
-                                       (0.16667f * Jerk * std::pow(t13, 3));
+    //         a21 = -(Jerk * t21);
 
-        v13 = (v12 + (a12 * t13)) -
-                                       (0.5f * Jerk * std::pow(t13, 2));
+    //         x22 = (v21 * t22) + (0.5f * a21 * std::pow(t22, 2));
 
-        a13 = (a12 + (Jerk * t13));
+    //         v22 = (v21 + (a21 * t22));
 
-        x21 = (v13 * t21) -
-                                       (0.16667f * Jerk * std::pow(t21, 3));
-        v21 = (v13 - (0.5f * Jerk * std::pow(t21, 2)));
-        a21 = -(Jerk * t21);
-        x22 = 0.0f;
-        v22 = v21;
-        a22 = a21;
-        x23 = (v22 * t23) +
-                                       (0.5f * a22 * std::pow(t23, 2)) +
-                                       (0.16667f * Jerk * std::pow(t23, 3));
-        v23 = (v22 + (a22 * t23)) +
-                                       (0.5f * Jerk * std::pow(t23, 2));
-        a23 = (a22 + (Jerk * t23));
+    //         a22 = a21;
 
-        if ((TargetDistance) >= (x11 + x12 +
-                                                          x13 + x21 + x22 + x23))
-        {
-            std::cout << "Target position is enough to reach full profile" << std::endl;
-        }
-        else
-        {
-            CalculateShorterProfile();
-        }
-    }
-    else
-    {
-        std::cout << "----------------------------  CASE 1 ----------------------------" << std::endl;
-        x11 = (0.16667f * Jerk * std::pow(t11, 3)) +
-                                       (0.5f * CurrentAcceleration * std::pow(t11, 2)) +
-                                       (CurrentVelocity * t11);
+    //         x23 = (v22 * t23) + (0.5f * a22 * std::pow(t23, 2)) +
+    //                             (0.16667f * Jerk * std::pow(t23, 3));
 
-        v11 = (CurrentVelocity +
-                                        (CurrentAcceleration * t11) +
-                                        (0.5f * Jerk * std::pow(t11, 2)));
+    //         v23 = (v22 + (a22 * t23)) + (0.5f * Jerk * std::pow(t23, 2));
 
-        a11 = (CurrentAcceleration +
-                                        (Jerk * t11));
+    //         a23 = (a22 + (Jerk * t23));
 
-        x12 = (v11 * t12) +
-                                       (0.5f * a11 * std::pow(t12, 2));
+    //         std::cout << "full profile distance: " << (x11 + x12 + x13 + x21 + x22 + x23) << std::endl;
 
-        v12 = (v11 + (a11 * t12));
+    //         if ((TargetDistance) >= (x11 + x12 + x13 + x21 + x22 + x23))
+    //         {
+    //             std::cout << "Target position is enough to reach full profile" << std::endl;
+    //         }
+    //         else
+    //         {
+    //             CalculateShorterProfile();
+    //         }
+    //     }
+    //     else if (t22 <= 0.0f && t12 >= 0.0f)
+    //     {
+    //         std::cout << "----------------------------  CASE 3 ----------------------------" << std::endl;
+    //         t21 = std::sqrt((MaxVelocity - CurrentVelocity) / Jerk);
+    //         t22 = 0.0f;
+    //         t23 = std::sqrt(MaxVelocity / Jerk);
 
-        a12 = a11;
+    //         x11 = (0.16667f * Jerk * std::pow(t11, 3)) +
+    //                                        (0.5f * CurrentAcceleration * std::pow(t11, 2)) +
+    //                                        (CurrentVelocity * t11);
 
-        x13 = (v12 * t13) +
-                                       (0.5f * a12 * std::pow(t13, 2)) -
-                                       (0.16667f * Jerk * std::pow(t13, 3));
+    //         v11 = (CurrentVelocity + (CurrentAcceleration * t11) +
+    //                                         (0.5f * Jerk * std::pow(t11, 2)));
 
-        v13 = (v12 + (a12 * t13)) -
-                                       (0.5f * Jerk * std::pow(t13, 2));
+    //         a11 = (CurrentAcceleration + (Jerk * t11));
 
-        a13 = (a12 + (Jerk * t13));
+    //         x12 = (v11 * t12) + (0.5f * a11 * std::pow(t12, 2));
 
-        x21 = (MaxVelocity * t21) -
-                                       (0.16667f * Jerk * std::pow(t21, 3));
+    //         v12 = (v11 + (a11 * t12));
 
-        v21 = (MaxVelocity -
-                                        (0.5f * Jerk * std::pow(t21, 2)));
+    //         a12 = a11;
 
-        a21 = -(Jerk * t21);
+    //         x13 = (v12 * t13) + (0.5f * a12 * std::pow(t13, 2)) -
+    //                             (0.16667f * Jerk * std::pow(t13, 3));
 
-        x22 = (v21 * t22) +
-                                       (0.5f * a21 * std::pow(t22, 2));
+    //         v13 = (v12 + (a12 * t13)) - (0.5f * Jerk * std::pow(t13, 2));
 
-        v22 = (v21 + (a21 * t22));
+    //         a13 = (a12 - (Jerk * t13));
 
-        a22 = a21;
+    //         x21 = (v13 * t21) - (0.16667f * Jerk * std::pow(t21, 3));
+    //         v21 = (v13 - (0.5f * Jerk * std::pow(t21, 2)));
+    //         a21 = -(Jerk * t21);
+    //         x22 = 0.0f;
+    //         v22 = v21;
+    //         a22 = a21;
+    //         x23 = (v22 * t23) + (0.5f * a22 * std::pow(t23, 2)) +
+    //                             (0.16667f * Jerk * std::pow(t23, 3));
+    //         v23 = (v22 + (a22 * t23)) + (0.5f * Jerk * std::pow(t23, 2));
+    //         a23 = (a22 + (Jerk * t23));
 
-        x23 = (v22 * t23) +
-                                       (0.5f * a22 * std::pow(t23, 2)) +
-                                       (0.16667f * Jerk * std::pow(t23, 3));
+    //         if ((TargetDistance) >= (x11 + x12 + x13 + x21 + x22 + x23))
+    //         {
+    //             std::cout << "Target position is enough to reach full profile" << std::endl;
+    //         }
+    //         else
+    //         {
+    //             CalculateShorterProfile();
+    //         }
+    //     }
+    //     else if (t12 <= 0.0f && t22 <= 0.0f)
+    //     {
+    //         std::cout << "----------------------------  CASE 4 ----------------------------" << std::endl;
+    //         t11 = std::sqrt((MaxVelocity - CurrentVelocity) / Jerk);
+    //         t12 = 0.0f;
+    //         t13 = std::sqrt(MaxVelocity / Jerk);
+    //         t21 = std::sqrt((MaxVelocity - CurrentVelocity) / Jerk);
+    //         t22 = 0.0f;
+    //         t23 = std::sqrt(MaxVelocity / Jerk);
+    //         x11 = (0.16667f * Jerk * std::pow(t11, 3)) +
+    //                                        (0.5f * CurrentAcceleration * std::pow(t11, 2)) +
+    //                                        (CurrentVelocity * t11);
 
-        v23 = (v22 + (a22 * t23)) +
-                                       (0.5f * Jerk * std::pow(t23, 2));
+    //         v11 = (CurrentVelocity + (CurrentAcceleration * t11) +
+    //                                  (0.5f * Jerk * std::pow(t11, 2)));
 
-        a23 = (a22 + (Jerk * t23));
+    //         a11 = (CurrentAcceleration + (Jerk * t11));
 
-        std::cout << "full profile distance: " << (x11 + x12 + x13 + x21 + x22 + x23) << std::endl;
+    //         x12 = (v11 * t12) + (0.5f * a11 * std::pow(t12, 2));
 
-        if ((TargetDistance) >= (x11 + x12 +
-                                                          x13 + x21 + x22 + x23))
-        {
-            std::cout << "Target position is enough to reach full profile" << std::endl;
-        }
-        else
-        {
-            CalculateShorterProfile();
-        }
-    }
-    std::cout << "----------------------------  RESULT  ----------------------------" << std::endl;
-    std::cout << "t11: " << t11 << " t12: " << t12 << " t13: " << t13 << std::endl;
-    std::cout << "x11: " << x11 << " x12: " << x12 << " x13: " << x13 << std::endl;
-    std::cout << "v11: " << v11 << " v12: " << v12 << " v13: " << v13 << std::endl;
-    std::cout << "a11: " << a11 << " a12: " << a12 << " a13: " << a13 << std::endl;
-    std::cout << "t21: " << t21 << " t22: " << t22 << " t23: " << t23 << std::endl;
-    std::cout << "x21: " << x21 << " x22: " << x22 << " x23: " << x23 << std::endl;
-    std::cout << "v21: " << v21 << " v22: " << v22 << " v23: " << v23 << std::endl;
-    std::cout << "a21: " << a21 << " a22: " << a22 << " a23: " << a23 << std::endl;
-    std::cout << "itogo: " << x11 + x12 + x13 + x21 + x22 + x23 << std::endl;
+    //         v12 = (v11 + (a11 * t12));
+
+    //         a12 = a11;
+
+    //         x13 = (v12 * t13) + (0.5f * a12 * std::pow(t13, 2)) -
+    //                             (0.16667f * Jerk * std::pow(t13, 3));
+
+    //         v13 = (v12 + (a12 * t13)) - (0.5f * Jerk * std::pow(t13, 2));
+
+    //         a13 = (a12 - (Jerk * t13));
+
+    //         x21 = (v13 * t21) - (0.16667f * Jerk * std::pow(t21, 3));
+    //         v21 = (v13 - (0.5f * Jerk * std::pow(t21, 2)));
+    //         a21 = -(Jerk * t21);
+    //         x22 = 0.0f;
+    //         v22 = v21;
+    //         a22 = a21;
+    //         x23 = (v22 * t23) + (0.5f * a22 * std::pow(t23, 2)) +
+    //                                        (0.16667f * Jerk * std::pow(t23, 3));
+    //         v23 = (v22 + (a22 * t23)) + (0.5f * Jerk * std::pow(t23, 2));
+    //         a23 = (a22 + (Jerk * t23));
+
+    //         if ((TargetDistance) >= (x11 + x12 + x13 + x21 + x22 + x23))
+    //         {
+    //             std::cout << "Target position is enough to reach full profile" << std::endl;
+    //         }
+    //         else
+    //         {
+    //             CalculateShorterProfile();
+    //         }
+    //     }
+    //     else
+    //     {
+    //         std::cout << "----------------------------  CASE 1 ----------------------------" << std::endl;
+    //         x11 = (0.16667f * Jerk * std::pow(t11, 3)) +
+    //                                        (0.5f * CurrentAcceleration * std::pow(t11, 2)) +
+    //                                        (CurrentVelocity * t11);
+
+    //         v11 = (CurrentVelocity + (CurrentAcceleration * t11) +
+    //                                 (0.5f * Jerk * std::pow(t11, 2)));
+
+    //         a11 = (CurrentAcceleration + (Jerk * t11));
+
+    //         x12 = (v11 * t12) + (0.5f * a11 * std::pow(t12, 2));
+
+    //         v12 = (v11 + (a11 * t12));
+
+    //         a12 = a11;
+
+    //         x13 = (v12 * t13) + (0.5f * a12 * std::pow(t13, 2)) -
+    //                             (0.16667f * Jerk * std::pow(t13, 3));
+
+    //         v13 = (v12 + (a12 * t13)) - (0.5f * Jerk * std::pow(t13, 2));
+
+    //         a13 = (a12 - (Jerk * t13));
+
+    //         x21 = (MaxVelocity * t21) - (0.16667f * Jerk * std::pow(t21, 3));
+
+    //         v21 = (MaxVelocity - (0.5f * Jerk * std::pow(t21, 2)));
+
+    //         a21 = -(Jerk * t21);
+
+    //         x22 = (v21 * t22) + (0.5f * a21 * std::pow(t22, 2));
+
+    //         v22 = (v21 + (a21 * t22));
+
+    //         a22 = a21;
+
+    //         x23 = (v22 * t23) + (0.5f * a22 * std::pow(t23, 2)) +
+    //                             (0.16667f * Jerk * std::pow(t23, 3));
+
+    //         v23 = (v22 + (a22 * t23)) + (0.5f * Jerk * std::pow(t23, 2));
+
+    //         a23 = (a22 + (Jerk * t23));
+
+    //         std::cout << "full profile distance: " << (x11 + x12 + x13 + x21 + x22 + x23) << std::endl;
+
+    //         if ((TargetDistance) >= (x11 + x12 + x13 + x21 + x22 + x23))
+    //         {
+    //             std::cout << "Target position is enough to reach full profile" << std::endl;
+    //         }
+    //         else
+    //         {
+    //             CalculateShorterProfile();
+    //         }
+    //     }
+    //     // std::cout << "----------------------------  RESULT  ----------------------------" << std::endl;
+    //     // std::cout << "t11: " << t11 << " t12: " << t12 << " t13: " << t13 << std::endl;
+    //     // std::cout << "x11: " << x11 << " x12: " << x12 << " x13: " << x13 << std::endl;
+    //     // std::cout << "v11: " << v11 << " v12: " << v12 << " v13: " << v13 << std::endl;
+    //     // std::cout << "a11: " << a11 << " a12: " << a12 << " a13: " << a13 << std::endl;
+    //     // std::cout << "t21: " << t21 << " t22: " << t22 << " t23: " << t23 << std::endl;
+    //     // std::cout << "x21: " << x21 << " x22: " << x22 << " x23: " << x23 << std::endl;
+    //     // std::cout << "v21: " << v21 << " v22: " << v22 << " v23: " << v23 << std::endl;
+    //     // std::cout << "a21: " << a21 << " a22: " << a22 << " a23: " << a23 << std::endl;
+    //     // std::cout << "itogo: " << x11 + x12 + x13 + x21 + x22 + x23 << std::endl;
 }

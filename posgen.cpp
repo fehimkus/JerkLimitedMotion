@@ -106,7 +106,7 @@ void *positionGenerator()
         break;
 
     case 40: // Cruise
-        if ((fabs(profiler.TargetPosition - profiler.CurrentPosition)) <= (profiler.x21 + profiler.x22 + profiler.x23))
+        if ((fabs(profiler.TargetPosition - profiler.CurrentPosition)) <= ((profiler.x21 + profiler.x22 + profiler.x23)* 1.001))
         {
             profiler.stage = 50;
         }
@@ -242,29 +242,27 @@ void resetData()
 }
 
 // Function to draw reference lines using ImPlot's native functions
-void drawReferenceLine(double value, const char *label, ImVec4 color)
+void drawReferenceLine(double value, const ImVec4 &color)
 {
-    // Get current plot limits
     double x_min = ImPlot::GetPlotLimits().X.Min;
     double x_max = ImPlot::GetPlotLimits().X.Max;
 
-    // Convert double to float for plotting
     float y_value = (float)value;
     float x_values[2] = {(float)x_min, (float)x_max};
     float y_values[2] = {y_value, y_value};
 
     ImPlot::SetNextLineStyle(color, 2.0f);
-    ImPlot::PlotLine(label, x_values, y_values, 2);
+    ImPlot::PlotLine("##ref", x_values, y_values, 2);
 }
 
 int main()
 {
     // Profiler başlangıç değerleri
     profiler.TargetPosition = 10.0;
-    profiler.MaxVelocity = 20.0;
-    profiler.MaxAcceleration = 50.0;
-    profiler.MaxDeceleration = 50.0;
-    profiler.Jerk = 500.0;
+    profiler.MaxVelocity = 10.0;
+    profiler.MaxAcceleration = 90.0;
+    profiler.MaxDeceleration = 90.0;
+    profiler.Jerk = 1000.0;
 
     profiler.CurrentPosition = 0.0;
     profiler.CurrentVelocity = 0.0;
@@ -402,7 +400,6 @@ int main()
             }
 
             ImGui::Spacing();
-
             if (ImGui::Button("RANDOMIZE", ImVec2(120, 40)))
             {
                 randomizeParameters();
@@ -431,6 +428,41 @@ int main()
             ImGui::Text("Position: [%.1f, %.1f]", pos_min, pos_max);
             ImGui::Text("Velocity: [%.1f, %.1f]", vel_min, vel_max);
             ImGui::Text("Acceleration: [%.1f, %.1f]", acc_min, acc_max);
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Text("Position time Parameters:");
+
+            // Display t11..t23 side-by-side
+            ImGui::Text("t11: %.3f", profiler.t11); ImGui::SameLine(0, 20);
+            ImGui::Text("t12: %.3f", profiler.t12); ImGui::SameLine(0, 20);
+            ImGui::Text("t13: %.3f", profiler.t13);
+            ImGui::Text("t21: %.3f", profiler.t21); ImGui::SameLine(0, 20);
+            ImGui::Text("t22: %.3f", profiler.t22); ImGui::SameLine(0, 20);
+            ImGui::Text("t23: %.3f", profiler.t23);
+
+            ImGui::Text("Position distance Parameters:");
+            ImGui::Text("x11: %.3f", profiler.x11); ImGui::SameLine(0, 20);
+            ImGui::Text("x12: %.3f", profiler.x12); ImGui::SameLine(0, 20);
+            ImGui::Text("x13: %.3f", profiler.x13);
+            ImGui::Text("x21: %.3f", profiler.x21); ImGui::SameLine(0, 20);
+            ImGui::Text("x22: %.3f", profiler.x22); ImGui::SameLine(0, 20);
+            ImGui::Text("x23: %.3f", profiler.x23);
+
+            ImGui::Text("Velocity Parameters:");
+            ImGui::Text("v11: %.3f", profiler.v11); ImGui::SameLine(0, 20);
+            ImGui::Text("v12: %.3f", profiler.v12); ImGui::SameLine(0, 20);
+            ImGui::Text("v13: %.3f", profiler.v13);
+            ImGui::Text("v21: %.3f", profiler.v21); ImGui::SameLine(0, 20);
+            ImGui::Text("v22: %.3f", profiler.v22); ImGui::SameLine(0, 20);
+            ImGui::Text("v23: %.3f", profiler.v23);
+
+            ImGui::Text("Acceleration Parameters:");
+            ImGui::Text("a11: %.3f", profiler.a11); ImGui::SameLine(0, 20);
+            ImGui::Text("a12: %.3f", profiler.a12); ImGui::SameLine(0, 20);
+            ImGui::Text("a13: %.3f", profiler.a13);
+            ImGui::Text("a21: %.3f", profiler.a21); ImGui::SameLine(0, 20);
+            ImGui::Text("a22: %.3f", profiler.a22); ImGui::SameLine(0, 20);
+            ImGui::Text("a23: %.3f", profiler.a23);
 
             ImGui::End();
         }
@@ -459,10 +491,10 @@ int main()
                 ImPlot::SetupAxisLimits(ImAxis_Y1, pos_min, pos_max, ImGuiCond_Always);
                 if (!time_data.empty() && !position_data.empty())
                 {
-                    ImPlot::PlotLine("Position", time_data.data(), position_data.data(), time_data.size());
+                    ImPlot::PlotLine("", time_data.data(), position_data.data(), time_data.size());
                 }
                 // Add reference line for target position
-                drawReferenceLine(profiler.TargetPosition, "Target", ImVec4(1, 0, 0, 0.5f));
+                drawReferenceLine(profiler.TargetPosition, ImVec4(1, 0, 0, 0.5f));
                 ImPlot::EndPlot();
             }
 
@@ -474,10 +506,10 @@ int main()
                 ImPlot::SetupAxisLimits(ImAxis_Y1, vel_min, vel_max, ImGuiCond_Always);
                 if (!time_data.empty() && !velocity_data.empty())
                 {
-                    ImPlot::PlotLine("Velocity", time_data.data(), velocity_data.data(), time_data.size());
+                    ImPlot::PlotLine("", time_data.data(), velocity_data.data(), time_data.size());
                 }
                 // Add reference line for max velocity
-                drawReferenceLine(profiler.MaxVelocity, "Max Velocity", ImVec4(1, 0, 0, 0.5f));
+                drawReferenceLine(profiler.MaxVelocity, ImVec4(1, 0, 0, 0.5f));
                 ImPlot::EndPlot();
             }
 
@@ -489,11 +521,11 @@ int main()
                 ImPlot::SetupAxisLimits(ImAxis_Y1, acc_min, acc_max, ImGuiCond_Always);
                 if (!time_data.empty() && !acceleration_data.empty())
                 {
-                    ImPlot::PlotLine("Acceleration", time_data.data(), acceleration_data.data(), time_data.size());
+                    ImPlot::PlotLine("", time_data.data(), acceleration_data.data(), time_data.size());
                 }
                 // Add reference lines for max acceleration and deceleration
-                drawReferenceLine(profiler.MaxAcceleration, "Max Acceleration", ImVec4(1, 0, 0, 0.5f));
-                drawReferenceLine(-profiler.MaxDeceleration, "Max Deceleration", ImVec4(0, 1, 0, 0.5f));
+                drawReferenceLine(profiler.MaxAcceleration, ImVec4(1, 0, 0, 0.5f));
+                drawReferenceLine(-profiler.MaxDeceleration, ImVec4(0, 1, 0, 0.5f));
                 ImPlot::EndPlot();
             }
 

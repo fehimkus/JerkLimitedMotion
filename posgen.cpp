@@ -9,25 +9,18 @@
 #include "imgui_impl_opengl3.h"
 #include "implot.h"
 #include <GLFW/glfw3.h>
-
-// Simple profiler structure
-struct Profiler {
-    double CurrentPosition = 0.0;
-    double CurrentVelocity = 0.0;
-    double CurrentAcceleration = 0.0;
-    double TargetPosition = 5.0;
-    double MaxVelocity = 10.0;
-    double MaxAcceleration = 70.0;
-    double MaxDeceleration = 40.0;
-    double Jerk = 800.0;
-    int stage = 0;
-};
+#include "profiler.h"
+#include "periodic.h"
 
 // Global variables
 Profiler profiler;
 std::atomic<bool> is_running{false};
+std::atomic<double> deltaTime{0.0};
+unsigned int cycle_time_us = 100'000; // 100 ms default
+double prev_cycle_time = 0.0;
+
 std::vector<float> time_data, position_data, velocity_data, acceleration_data;
-constexpr int MAX_DATA_POINTS = 2000;
+constexpr int MAX_DATA_POINTS = 20000;
 float current_time = 0.0f;
 
 // Window constants
@@ -37,102 +30,205 @@ constexpr int WINDOW_HEIGHT = 800;
 // Random number generator
 std::random_device rd;
 std::mt19937 gen(rd());
+std::uniform_real_distribution<double> posDist(-10.0, 10.0);
+std::uniform_int_distribution<int> velDist(5, 30);
+std::uniform_int_distribution<int> accDist(30, 100);
 
 // Function to calculate plot bounds based on input parameters
-void calculatePlotBounds(double& pos_min, double& pos_max, 
-                        double& vel_min, double& vel_max,
-                        double& acc_min, double& acc_max) {
+void calculatePlotBounds(double &pos_min, double &pos_max,
+                         double &vel_min, double &vel_max,
+                         double &acc_min, double &acc_max)
+{
     // Position bounds - based on target position with margin
     pos_min = std::min(0.0, profiler.TargetPosition) - 1.0;
     pos_max = std::max(0.0, profiler.TargetPosition) + 1.0;
-    if (pos_min == pos_max) {
+    if (pos_min == pos_max)
+    {
         pos_min -= 1.0;
         pos_max += 1.0;
     }
 
     // Velocity bounds - based on max velocity with margin
     vel_min = -profiler.MaxVelocity * 0.1; // Allow small negative for deceleration
-    vel_max = profiler.MaxVelocity * 1.1;   // 10% margin
+    vel_max = profiler.MaxVelocity * 1.1;  // 10% margin
 
     // Acceleration bounds - based on max acceleration/deceleration with margin
     acc_min = -profiler.MaxDeceleration * 1.1; // 10% margin for deceleration
-    acc_max = profiler.MaxAcceleration * 1.1;   // 10% margin for acceleration
+    acc_max = profiler.MaxAcceleration * 1.1;  // 10% margin for acceleration
 }
 
-void updateMotion(float dt) {
-    if (!is_running || profiler.stage == 0) return;
+// ESKİ YAPIDAKİ TRAJECTORY GENERATION MANTIĞI
+void *positionGenerator()
+{
+    double discreteTime{};
 
-    // Simplified motion logic
-    switch (profiler.stage) {
-        case 1: // Acceleration phase
-            profiler.CurrentAcceleration = std::min(profiler.CurrentAcceleration + profiler.Jerk * dt, profiler.MaxAcceleration);
-            profiler.CurrentVelocity = std::min(profiler.CurrentVelocity + profiler.CurrentAcceleration * dt, profiler.MaxVelocity);
-            if (profiler.CurrentVelocity >= profiler.MaxVelocity) {
-                profiler.stage = 2;
-            }
-            break;
-        case 2: // Constant velocity
-            if (std::abs(profiler.CurrentPosition - profiler.TargetPosition) < 10.0) {
-                profiler.stage = 3;
-            }
-            break;
-        case 3: // Deceleration phase
-            profiler.CurrentAcceleration = std::max(profiler.CurrentAcceleration - profiler.Jerk * dt, -profiler.MaxDeceleration);
-            profiler.CurrentVelocity = std::max(profiler.CurrentVelocity + profiler.CurrentAcceleration * dt, 0.0);
-            if (profiler.CurrentVelocity <= 0.0) {
-                profiler.stage = 0;
-                profiler.CurrentPosition = profiler.TargetPosition;
-                is_running = false;
-            }
-            break;
+    discreteTime = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - profiler.begin).count()) * 1e-6f;
+
+    deltaTime = discreteTime - prev_cycle_time;
+
+    switch (profiler.stage)
+    {
+    case 10: // Accelerate with jerk ------- until max acceleration reached
+        if (profiler.CurrentAcceleration >= profiler.a11)
+        {
+            profiler.CurrentAcceleration = profiler.a11;
+            profiler.stage = 20;
+        }
+        else
+        {
+            profiler.CurrentAcceleration += profiler.Jerk * deltaTime;
+            profiler.CurrentVelocity += profiler.CurrentAcceleration * deltaTime;
+        }
+        break;
+
+    case 20: // Constant acceleration ------- until enough distance for ramp down
+        if (profiler.CurrentVelocity >= profiler.v12)
+        {
+            profiler.stage = 30;
+        }
+        else
+        {
+            profiler.CurrentVelocity += profiler.CurrentAcceleration * deltaTime;
+        }
+        break;
+
+    case 30: // Ramp down acceleration ------- until max velocity reached
+        if (profiler.CurrentAcceleration <= 0)
+        {
+            profiler.CurrentAcceleration = 0;
+            profiler.stage = 40;
+        }
+        else
+        {
+            profiler.CurrentAcceleration -= profiler.Jerk * deltaTime;
+            profiler.CurrentVelocity += profiler.CurrentAcceleration * deltaTime;
+        }
+        break;
+
+    case 40: // Cruise
+        if ((fabs(profiler.TargetPosition - profiler.CurrentPosition)) <= (profiler.x21 + profiler.x22 + profiler.x23))
+        {
+            profiler.stage = 50;
+        }
+        break;
+
+    case 50: // Begin deceleration
+        if (fabs(profiler.CurrentAcceleration) > fabs(profiler.a21))
+        {
+            profiler.CurrentAcceleration = profiler.a21;
+            profiler.stage = 60;
+        }
+        else
+        {
+            profiler.CurrentAcceleration -= profiler.Jerk * deltaTime;
+            profiler.CurrentVelocity += profiler.CurrentAcceleration * deltaTime;
+        }
+        break;
+
+    case 60: // Constant deceleration
+        if (profiler.CurrentVelocity <= profiler.v22)
+        {
+            profiler.stage = 70;
+        }
+        else
+        {
+            profiler.CurrentVelocity += profiler.CurrentAcceleration * deltaTime;
+        }
+        break;
+
+    case 70: // End deceleration ramp
+    {
+        if ((std::fabs(profiler.CurrentPosition) >= std::fabs(profiler.TargetPosition)) ||
+            (profiler.CurrentVelocity < 0.0f))
+        {
+            profiler.CurrentVelocity = 0;
+            profiler.CurrentAcceleration = 0;
+            profiler.CurrentPosition = profiler.TargetPosition;
+            profiler.stage = 0;
+            is_running = false;
+        }
+        else
+        {
+            profiler.CurrentAcceleration += profiler.Jerk * deltaTime;
+            profiler.CurrentVelocity += profiler.CurrentAcceleration * deltaTime;
+        }
+    }
+    break;
+
+    case 0:
+        // Idle state - motion completed
+        break;
+
+    default:
+        break;
     }
 
-    profiler.CurrentPosition += profiler.CurrentVelocity * dt;
-    
-    // Update data for plotting
-    current_time += dt;
-    
-    time_data.push_back(current_time);
-    position_data.push_back((float)profiler.CurrentPosition);
-    velocity_data.push_back((float)profiler.CurrentVelocity);
-    acceleration_data.push_back((float)profiler.CurrentAcceleration);
-    
-    // Keep data size manageable
-    if (time_data.size() > MAX_DATA_POINTS) {
-        time_data.erase(time_data.begin());
-        position_data.erase(position_data.begin());
-        velocity_data.erase(velocity_data.begin());
-        acceleration_data.erase(acceleration_data.begin());
+    profiler.CurrentPosition += profiler.CurrentVelocity * deltaTime * profiler.direction;
+
+    prev_cycle_time = discreteTime;
+    return nullptr;
+}
+
+// Periodic task - AYRI THREAD'DE ÇALIŞACAK
+void my_task()
+{
+    if (is_running && profiler.stage != 0)
+    {
+        positionGenerator();
+
+        // Update data for plotting
+        current_time = (float)prev_cycle_time;
+
+        time_data.push_back(current_time);
+        position_data.push_back((float)profiler.CurrentPosition);
+        velocity_data.push_back((float)profiler.CurrentVelocity);
+        acceleration_data.push_back((float)profiler.CurrentAcceleration);
+
+        // Keep data size manageable
+        if (time_data.size() > MAX_DATA_POINTS)
+        {
+            time_data.erase(time_data.begin());
+            position_data.erase(position_data.begin());
+            velocity_data.erase(velocity_data.begin());
+            acceleration_data.erase(acceleration_data.begin());
+        }
     }
 }
 
-void startMotion() {
+void startMotion()
+{
     is_running = true;
-    profiler.stage = 1;
+
+    // ESKİ YAPIDAKİ PROFİL HESAPLAMA
+    profiler.TargetDistance = std::fabs(profiler.TargetPosition - profiler.CurrentPosition);
+    profiler.direction = (profiler.TargetPosition - profiler.CurrentPosition < 0) ? -1 : 1;
+    profiler.CalculatePositionProfile();
+    profiler.begin = std::chrono::high_resolution_clock::now();
+    profiler.stage = 10;
+
     std::cout << "Motion started - Target: " << profiler.TargetPosition << std::endl;
 }
 
-void stopMotion() {
+void stopMotion()
+{
     is_running = false;
     profiler.stage = 0;
     std::cout << "Motion stopped" << std::endl;
 }
 
-void randomizeParameters() {
-    std::uniform_real_distribution<double> pos_dist(-10.0, 10.0);
-    std::uniform_real_distribution<double> vel_dist(5.0, 30.0);
-    std::uniform_real_distribution<double> acc_dist(30.0, 100.0);
-    
-    profiler.TargetPosition = pos_dist(gen);
-    profiler.MaxVelocity = vel_dist(gen);
-    profiler.MaxAcceleration = acc_dist(gen);
-    profiler.MaxDeceleration = acc_dist(gen);
-    profiler.Jerk = (profiler.MaxAcceleration + profiler.MaxDeceleration) * 10.0;
-    
+void randomizeParameters()
+{
+    profiler.TargetPosition = posDist(gen);
+    profiler.MaxVelocity = velDist(gen);
+    profiler.MaxAcceleration = accDist(gen);
+    profiler.MaxDeceleration = accDist(gen);
+    profiler.Jerk = ((profiler.MaxAcceleration + profiler.MaxDeceleration) / 2.0) * 12.5;
+
     std::cout << "Parameters randomized" << std::endl;
 }
 
-void resetData() {
+void resetData()
+{
     time_data.clear();
     position_data.clear();
     velocity_data.clear();
@@ -141,11 +237,43 @@ void resetData() {
     profiler.CurrentPosition = 0.0;
     profiler.CurrentVelocity = 0.0;
     profiler.CurrentAcceleration = 0.0;
+    prev_cycle_time = 0.0;
+    deltaTime = 0.0;
 }
 
-int main() {
+// Function to draw reference lines using ImPlot's native functions
+void drawReferenceLine(double value, const char *label, ImVec4 color)
+{
+    // Get current plot limits
+    double x_min = ImPlot::GetPlotLimits().X.Min;
+    double x_max = ImPlot::GetPlotLimits().X.Max;
+
+    // Convert double to float for plotting
+    float y_value = (float)value;
+    float x_values[2] = {(float)x_min, (float)x_max};
+    float y_values[2] = {y_value, y_value};
+
+    ImPlot::SetNextLineStyle(color, 2.0f);
+    ImPlot::PlotLine(label, x_values, y_values, 2);
+}
+
+int main()
+{
+    // Profiler başlangıç değerleri
+    profiler.TargetPosition = 10.0;
+    profiler.MaxVelocity = 20.0;
+    profiler.MaxAcceleration = 50.0;
+    profiler.MaxDeceleration = 50.0;
+    profiler.Jerk = 500.0;
+
+    profiler.CurrentPosition = 0.0;
+    profiler.CurrentVelocity = 0.0;
+    profiler.CurrentAcceleration = 0.0;
+    profiler.stage = 0;
+
     // Initialize GLFW
-    if (!glfwInit()) {
+    if (!glfwInit())
+    {
         std::cerr << "Failed to initialize GLFW" << std::endl;
         return -1;
     }
@@ -157,28 +285,30 @@ int main() {
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // macOS için
 
     // Create window with fixed size
-    GLFWwindow* window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, 
-                                         "Motion Control System", NULL, NULL);
-    
+    GLFWwindow *window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT,
+                                          "Motion Control System", NULL, NULL);
+
     // Pencere oluşturulamazsa daha düşük OpenGL sürümü dene
-    if (!window) {
+    if (!window)
+    {
         std::cout << "Failed to create window with OpenGL 3.2, trying compatible mode..." << std::endl;
-        
+
         // Reset window hints
         glfwDefaultWindowHints();
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
-        
-        window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, 
-                                 "Motion Control System", NULL, NULL);
+
+        window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT,
+                                  "Motion Control System", NULL, NULL);
     }
 
-    if (!window) {
+    if (!window)
+    {
         std::cerr << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
         return -1;
     }
-    
+
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1); // Enable vsync
 
@@ -186,43 +316,46 @@ int main() {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImPlot::CreateContext();
-    ImGuiIO& io = ImGui::GetIO();
+    ImGuiIO &io = ImGui::GetIO();
     (void)io;
-    
+
     // Setup style
     ImGui::StyleColorsDark();
 
     // GLSL version detection
-    const char* glsl_version = "#version 150";
-    if (glfwGetWindowAttrib(window, GLFW_CONTEXT_VERSION_MAJOR) == 2) {
+    const char *glsl_version = "#version 150";
+    if (glfwGetWindowAttrib(window, GLFW_CONTEXT_VERSION_MAJOR) == 2)
+    {
         glsl_version = "#version 120";
     }
-    
+
     std::cout << "Using GLSL version: " << glsl_version << std::endl;
 
     // Setup Platform/Renderer backends
-    if (!ImGui_ImplGlfw_InitForOpenGL(window, true)) {
+    if (!ImGui_ImplGlfw_InitForOpenGL(window, true))
+    {
         std::cerr << "Failed to initialize ImGui GLFW backend" << std::endl;
         return -1;
     }
-    
-    if (!ImGui_ImplOpenGL3_Init(glsl_version)) {
+
+    if (!ImGui_ImplOpenGL3_Init(glsl_version))
+    {
         std::cerr << "Failed to initialize ImGui OpenGL3 backend" << std::endl;
         return -1;
     }
 
-    // Variables for timing
-    auto last_time = std::chrono::high_resolution_clock::now();
+    // AYRI THREAD'DE PERIODIC TASK BAŞLAT
+    std::thread periodic_thread([&]()
+                                {
+        update_period(cycle_time_us);
+        run_periodic(my_task); });
+    periodic_thread.detach();
 
     std::cout << "Application started successfully!" << std::endl;
 
     // Main loop
-    while (!glfwWindowShouldClose(window)) {
-        // Calculate delta time
-        auto current_time_point = std::chrono::high_resolution_clock::now();
-        float dt = std::chrono::duration<float>(current_time_point - last_time).count();
-        last_time = current_time_point;
-
+    while (!glfwWindowShouldClose(window))
+    {
         // Poll events
         glfwPollEvents();
 
@@ -231,23 +364,21 @@ int main() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        // Update motion physics
-        updateMotion(dt);
-
         // Calculate plot bounds based on current input parameters
         double pos_min, pos_max, vel_min, vel_max, acc_min, acc_max;
         calculatePlotBounds(pos_min, pos_max, vel_min, vel_max, acc_min, acc_max);
 
-        // Main control window - left side
+        // Main control window - left side (YENİ YAPIDAKİ MODERN ARAYÜZ)
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImVec2(400, WINDOW_HEIGHT));
-        if (ImGui::Begin("Control Panel", nullptr, 
-                    ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | 
-                    ImGuiWindowFlags_NoCollapse)) {
+        if (ImGui::Begin("Control Panel", nullptr,
+                         ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                             ImGuiWindowFlags_NoCollapse))
+        {
 
             ImGui::Text("Motion Parameters");
             ImGui::Separator();
-            
+
             // Input fields
             ImGui::InputDouble("Target Position", &profiler.TargetPosition, 0.1, 1.0, "%.3f");
             ImGui::InputDouble("Max Velocity", &profiler.MaxVelocity, 0.1, 1.0, "%.3f");
@@ -260,21 +391,25 @@ int main() {
             ImGui::Spacing();
 
             // Control buttons
-            if (ImGui::Button("START", ImVec2(120, 40))) {
+            if (ImGui::Button("START", ImVec2(120, 40)))
+            {
                 startMotion();
             }
             ImGui::SameLine();
-            if (ImGui::Button("STOP", ImVec2(120, 40))) {
+            if (ImGui::Button("STOP", ImVec2(120, 40)))
+            {
                 stopMotion();
             }
-            
+
             ImGui::Spacing();
-            
-            if (ImGui::Button("RANDOMIZE", ImVec2(120, 40))) {
+
+            if (ImGui::Button("RANDOMIZE", ImVec2(120, 40)))
+            {
                 randomizeParameters();
             }
             ImGui::SameLine();
-            if (ImGui::Button("RESET DATA", ImVec2(120, 40))) {
+            if (ImGui::Button("RESET DATA", ImVec2(120, 40)))
+            {
                 resetData();
             }
 
@@ -300,61 +435,65 @@ int main() {
             ImGui::End();
         }
 
-        // Plot window - right side
+        // Plot window - right side (YENİ YAPIDAKİ MODERN GRAFİKLER)
         ImGui::SetNextWindowPos(ImVec2(400, 0));
         ImGui::SetNextWindowSize(ImVec2(WINDOW_WIDTH - 400, WINDOW_HEIGHT));
-        if (ImGui::Begin("Motion Plots", nullptr, 
-                    ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | 
-                    ImGuiWindowFlags_NoCollapse)) {
+        if (ImGui::Begin("Motion Plots", nullptr,
+                         ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                             ImGuiWindowFlags_NoCollapse))
+        {
 
             // Calculate time window for X-axis (show last 10 seconds or all data)
             float time_min = 0.0f;
             float time_max = current_time;
-            if (current_time > 10.0f) {
+            if (current_time > 10.0f)
+            {
                 time_min = current_time - 10.0f; // Show last 10 seconds
             }
 
             // Position plot
-            if (ImPlot::BeginPlot("Position", ImVec2(-1, 250))) {
+            if (ImPlot::BeginPlot("Position", ImVec2(-1, 250)))
+            {
                 ImPlot::SetupAxes("Time (s)", "Position");
                 ImPlot::SetupAxisLimits(ImAxis_X1, time_min, time_max, ImGuiCond_Always);
                 ImPlot::SetupAxisLimits(ImAxis_Y1, pos_min, pos_max, ImGuiCond_Always);
-                if (!time_data.empty() && !position_data.empty()) {
+                if (!time_data.empty() && !position_data.empty())
+                {
                     ImPlot::PlotLine("Position", time_data.data(), position_data.data(), time_data.size());
                 }
-                // Add reference lines
-                ImPlot::SetNextLineStyle(ImVec4(1, 0, 0, 0.5f), 2.0f);
-                ImPlot::PlotLine("Target", &time_min, &profiler.TargetPosition, 2, 0);
+                // Add reference line for target position
+                drawReferenceLine(profiler.TargetPosition, "Target", ImVec4(1, 0, 0, 0.5f));
                 ImPlot::EndPlot();
             }
 
             // Velocity plot
-            if (ImPlot::BeginPlot("Velocity", ImVec2(-1, 250))) {
+            if (ImPlot::BeginPlot("Velocity", ImVec2(-1, 250)))
+            {
                 ImPlot::SetupAxes("Time (s)", "Velocity");
                 ImPlot::SetupAxisLimits(ImAxis_X1, time_min, time_max, ImGuiCond_Always);
                 ImPlot::SetupAxisLimits(ImAxis_Y1, vel_min, vel_max, ImGuiCond_Always);
-                if (!time_data.empty() && !velocity_data.empty()) {
+                if (!time_data.empty() && !velocity_data.empty())
+                {
                     ImPlot::PlotLine("Velocity", time_data.data(), velocity_data.data(), time_data.size());
                 }
-                // Add reference lines
-                ImPlot::SetNextLineStyle(ImVec4(1, 0, 0, 0.5f), 2.0f);
-                ImPlot::PlotLine("Max Vel", &time_min, &profiler.MaxVelocity, 2, 0);
+                // Add reference line for max velocity
+                drawReferenceLine(profiler.MaxVelocity, "Max Velocity", ImVec4(1, 0, 0, 0.5f));
                 ImPlot::EndPlot();
             }
 
             // Acceleration plot
-            if (ImPlot::BeginPlot("Acceleration", ImVec2(-1, 250))) {
+            if (ImPlot::BeginPlot("Acceleration", ImVec2(-1, 250)))
+            {
                 ImPlot::SetupAxes("Time (s)", "Acceleration");
                 ImPlot::SetupAxisLimits(ImAxis_X1, time_min, time_max, ImGuiCond_Always);
                 ImPlot::SetupAxisLimits(ImAxis_Y1, acc_min, acc_max, ImGuiCond_Always);
-                if (!time_data.empty() && !acceleration_data.empty()) {
+                if (!time_data.empty() && !acceleration_data.empty())
+                {
                     ImPlot::PlotLine("Acceleration", time_data.data(), acceleration_data.data(), time_data.size());
                 }
-                // Add reference lines
-                ImPlot::SetNextLineStyle(ImVec4(1, 0, 0, 0.5f), 2.0f);
-                ImPlot::PlotLine("Max Acc", &time_min, &profiler.MaxAcceleration, 2, 0);
-                ImPlot::SetNextLineStyle(ImVec4(1, 0, 0, 0.5f), 2.0f);
-                ImPlot::PlotLine("Max Dec", &time_min, &profiler.MaxDeceleration, 2, 0);
+                // Add reference lines for max acceleration and deceleration
+                drawReferenceLine(profiler.MaxAcceleration, "Max Acceleration", ImVec4(1, 0, 0, 0.5f));
+                drawReferenceLine(-profiler.MaxDeceleration, "Max Deceleration", ImVec4(0, 1, 0, 0.5f));
                 ImPlot::EndPlot();
             }
 

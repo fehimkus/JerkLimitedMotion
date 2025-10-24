@@ -2,6 +2,7 @@
 #include <thread>
 #include <atomic>
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <algorithm>
 #include "imgui.h"
@@ -205,7 +206,8 @@ void startMotion()
     profiler.CalculatePositionProfile();
     profiler.begin = std::chrono::high_resolution_clock::now();
     profiler.stage = 10;
-
+    prev_cycle_time = 0.0;
+    deltaTime = 0.0;
     std::cout << "Motion started - Target: " << profiler.TargetPosition << std::endl;
 }
 
@@ -214,17 +216,6 @@ void stopMotion()
     is_running = false;
     profiler.stage = 0;
     std::cout << "Motion stopped" << std::endl;
-}
-
-void randomizeParameters()
-{
-    profiler.TargetPosition = posDist(gen);
-    profiler.MaxVelocity = velDist(gen);
-    profiler.MaxAcceleration = accDist(gen);
-    profiler.MaxDeceleration = accDist(gen);
-    profiler.Jerk = ((profiler.MaxAcceleration + profiler.MaxDeceleration) / 2.0) * 12.5;
-
-    std::cout << "Parameters randomized" << std::endl;
 }
 
 void resetData()
@@ -239,6 +230,72 @@ void resetData()
     profiler.CurrentAcceleration = 0.0;
     prev_cycle_time = 0.0;
     deltaTime = 0.0;
+}
+
+void randomizeParameters()
+{
+    is_running = true;
+    if (profiler.stage == 0)
+    {
+        resetData();
+        profiler.TargetPosition = posDist(gen);
+        profiler.MaxVelocity = velDist(gen);
+        profiler.MaxAcceleration = accDist(gen);
+        profiler.MaxDeceleration = accDist(gen);
+        profiler.Jerk = ((profiler.MaxAcceleration + profiler.MaxDeceleration) / 2.0) * 12.5;
+
+        profiler.TargetDistance = std::fabs(profiler.TargetPosition - profiler.CurrentPosition);
+        profiler.direction = (profiler.TargetPosition - profiler.CurrentPosition < 0) ? -1 : 1;
+        profiler.CalculatePositionProfile();
+        profiler.begin = std::chrono::high_resolution_clock::now();
+        profiler.stage = 10;
+        prev_cycle_time = 0.0;
+        deltaTime = 0.0;
+    }
+    else
+    {
+        if (profiler.CurrentAcceleration != 0.0 &&
+            profiler.CurrentPosition != profiler.TargetPosition)
+        {
+            std::ofstream logFile("motion_log.txt", std::ios::app); // append mode
+            if (logFile.is_open())
+            {
+                logFile << "==================== MOTION LOG ====================\n";
+                logFile << "CurrentPosition: " << profiler.CurrentPosition
+                        << " | CurrentAcceleration: " << profiler.CurrentAcceleration << "\n";
+                
+                logFile << "Target Position: " << profiler.TargetPosition << "\n";
+                logFile << "maxVelocity: " << profiler.MaxVelocity
+                        << " | maxAcceleration: " << profiler.MaxAcceleration
+                        << " | maxDeceleration: " << profiler.MaxDeceleration
+                        << " | Jerk: " << profiler.Jerk << "\n";
+
+                logFile << "-- Time Parameters --\n";
+                logFile << "t11: " << profiler.t11 << ", t12: " << profiler.t12 << ", t13: " << profiler.t13 << "\n";
+                logFile << "t21: " << profiler.t21 << ", t22: " << profiler.t22 << ", t23: " << profiler.t23 << "\n";
+
+                logFile << "-- Position Distances --\n";
+                logFile << "x11: " << profiler.x11 << ", x12: " << profiler.x12 << ", x13: " << profiler.x13 << "\n";
+                logFile << "x21: " << profiler.x21 << ", x22: " << profiler.x22 << ", x23: " << profiler.x23 << "\n";
+
+                logFile << "-- Velocity Values --\n";
+                logFile << "v11: " << profiler.v11 << ", v12: " << profiler.v12 << ", v13: " << profiler.v13 << "\n";
+                logFile << "v21: " << profiler.v21 << ", v22: " << profiler.v22 << ", v23: " << profiler.v23 << "\n";
+
+                logFile << "-- Acceleration Values --\n";
+                logFile << "a11: " << profiler.a11 << ", a12: " << profiler.a12 << ", a13: " << profiler.a13 << "\n";
+                logFile << "a21: " << profiler.a21 << ", a22: " << profiler.a22 << ", a23: " << profiler.a23 << "\n";
+
+                logFile << "====================================================\n\n";
+                logFile.close();
+            }
+            else
+            {
+                std::cerr << "Error: Cannot open log file!" << std::endl;
+            }
+        }
+    }
+
 }
 
 // Function to draw reference lines using ImPlot's native functions
@@ -258,7 +315,7 @@ void drawReferenceLine(double value, const ImVec4 &color)
 int main()
 {
     // Profiler başlangıç değerleri
-    profiler.TargetPosition = 10.0;
+    profiler.TargetPosition = 2.0;
     profiler.MaxVelocity = 10.0;
     profiler.MaxAcceleration = 90.0;
     profiler.MaxDeceleration = 90.0;
@@ -268,7 +325,8 @@ int main()
     profiler.CurrentVelocity = 0.0;
     profiler.CurrentAcceleration = 0.0;
     profiler.stage = 0;
-
+    static std::thread rnd_thread;
+    static std::atomic<bool> rnd_thread_active{false};
     // Initialize GLFW
     if (!glfwInit())
     {
@@ -396,13 +454,34 @@ int main()
             ImGui::SameLine();
             if (ImGui::Button("STOP", ImVec2(120, 40)))
             {
+                rnd_thread_active = false;
+                rnd_thread.join();
                 stopMotion();
             }
 
             ImGui::Spacing();
             if (ImGui::Button("RANDOMIZE", ImVec2(120, 40)))
             {
-                randomizeParameters();
+                // Toggle background randomizer thread
+
+                if (!rnd_thread_active.load())
+                {
+                    rnd_thread_active = true;
+                    rnd_thread = std::thread([&]()
+                                             {
+                                                 while (rnd_thread_active.load())
+                                                 {
+                                                     randomizeParameters();
+                                                     std::this_thread::sleep_for(std::chrono::milliseconds(500)); // adjust interval as needed
+                                                 }
+                                             });
+                    rnd_thread.detach();
+                }
+                else
+                {
+                    // Stop the background thread loop
+                    rnd_thread_active = false;
+                }
             }
             ImGui::SameLine();
             if (ImGui::Button("RESET DATA", ImVec2(120, 40)))

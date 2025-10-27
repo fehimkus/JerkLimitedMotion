@@ -187,21 +187,14 @@ inline void computeSystem3(const double x[2], double f[2],
 {
     const double t11 = x[0];
     const double t22 = x[1];
-
-    // First equation:
-    // J*t21^2 + J*t21*t22 = Vcurr + acurr*t11 + 0.5*J*t11^2 +
-    //                        acurr*t1 + 0.5*J*t1^2 + 0.5*acurr^2/J
+    // First equation: // J*t21^2 + J*t21*t22 = Vcurr + acurr*t11 + 0.5*J*t11^2 + // acurr*t1 + 0.5*J*t1^2 + 0.5*acurr^2/J
     f[0] = (J * t21 * t21 + J * t21 * t22) -
            (Vcurr + acurr * t11 + 0.5 * J * t11 * t11 +
             acurr * t1 + 0.5 * J * t1 * t1 + 0.5 * acurr * acurr / J);
-
-    // Second equation:
-    // c = (acurr^2*t11/J) + 2.5*acurr*t11^2 + Vcurr*t11 + 1.33334*J*t11^3 +
-    //      1.5*J*t21^2*t22 + 0.5*J*t21*t22^2
+    // Second equation: // c = (acurr^2*t11/J) + 2.5*acurr*t11^2 + Vcurr*t11 + 1.33334*J*t11^3 + // 1.5*J*t21^2*t22 + 0.5*J*t21*t22^2
     f[1] = (acurr * acurr * t11 / J + 2.5 * acurr * t11 * t11 +
             Vcurr * t11 + 1.33334 * J * t11 * t11 * t11 +
-            1.5 * J * t21 * t21 * t22 + 0.5 * J * t21 * t22 * t22) -
-           c;
+            1.5 * J * t21 * t21 * t22 + 0.5 * J * t21 * t22 * t22) - c;
 }
 
 inline void computeJacobian3(const double x[2], double J_mat[2][2],
@@ -211,56 +204,57 @@ inline void computeJacobian3(const double x[2], double J_mat[2][2],
     const double t11 = x[0];
     const double t22 = x[1];
 
-    // Partial derivatives of the first equation
-    J_mat[0][0] = -acurr - J * t11; // df1/dt11
-    J_mat[0][1] = J * t21;          // df1/dt22
+    J_mat[0][0] = -acurr - J * t11;
+    J_mat[0][1] =  J * t21;
 
-    // Partial derivatives of the second equation
     J_mat[1][0] = acurr * acurr / J + 5.0 * acurr * t11 +
-                  Vcurr + 4.00002 * J * t11 * t11;     // df2/dt11
-    J_mat[1][1] = 1.5 * J * t21 * t21 + J * t21 * t22; // df2/dt22
+                  Vcurr + 4.0 * J * t11 * t11;
+    J_mat[1][1] = 1.5 * J * t21 * t21 + J * t21 * t22;
 }
 
-std::vector<double> newtonRaphson3(double t21, double J, double Vcurr,
-                                   double acurr, double t1, double c,
-                                   double t11_initial, double t22_initial,
-                                   double tol = 1e-6, int max_iter = 100)
+// Returns true if converged, false if failed
+bool newtonRaphson3(double t21, double J, double Vcurr,
+                    double acurr, double c,
+                    double &t11, double &t22,
+                    double tol = 1e-6, int max_iter = 100)
 {
-    double x[2] = {t11_initial, t22_initial};
-    double f[2];
-    double J_mat[2][2];
-    double dx[2];
-    double minus_f[2];
+    // --- Security checks ---
+    if (J <= 0.0 || t21 < 0.0 || t11 < 0.0 || t22 < 0.0)
+        return false;
+
+    double x[2] = {t11, t22};
+    double f[2], J_mat[2][2], dx[2], minus_f[2];
 
     for (int iter = 0; iter < max_iter; ++iter)
     {
-        computeSystem3(x, f, t21, J, Vcurr, acurr, t1, c);
+        computeSystem3(x, f, t21, J, Vcurr, acurr, t11, c);
 
-        // Check for convergence using squared L2 norm
-        const double norm = f[0] * f[0] + f[1] * f[1];
-        if (norm < tol * tol)
+        // Check convergence
+        if (f[0]*f[0] + f[1]*f[1] < tol * tol)
         {
-            std::cout << "Converged after " << iter << " iterations." << std::endl;
-            return {x[0], x[1]};
+            t11 = std::max(0.0, x[0]);
+            t22 = std::max(0.0, x[1]);
+            return true;
         }
 
-        // Compute Jacobian
-        computeJacobian3(x, J_mat, t21, J, Vcurr, acurr, t1);
+        computeJacobian3(x, J_mat, t21, J, Vcurr, acurr, t11);
 
-        // Solve J*dx = -f
         minus_f[0] = -f[0];
         minus_f[1] = -f[1];
+
         solve2x2System(J_mat, minus_f, dx);
 
-        // Update solution
         x[0] += dx[0];
         x[1] += dx[1];
+
+        // Enforce constraints (time ≥ 0)
+        if (x[0] < 0.0) x[0] = 0.0;
+        if (x[1] < 0.0) x[1] = 0.0;
     }
 
-    std::cout << "Warning: Newton-Raphson did not converge after "
-              << max_iter << " iterations." << std::endl;
-    return {x[0], x[1]};
+    return false; // Not converged
 }
+
 
 void Profiler::CalculateShorterProfile()
 {
@@ -573,24 +567,29 @@ void Profiler::CalculateShorterProfile()
             double a23_no_t2 = (a21_no_t2 + (Jerk * t13));
             double min_distance2 = 2 * (x21_no_t2 + x23_no_t2);
 
-            // std::cout << "min_distance2: " << min_distance2 << std::endl;
+            std::cout << "min_distance2: " << min_distance2 << std::endl;
 
             if (TargetDistance >= min_distance2)
             {
                 std::cout << "TODO: Target position is enough to reach max acceleration from one side" << std::endl;
+                std::cout << "t11: " << t11 << ", t12: " << t12 << " t13: " << t13 << " t21: " << t21 << " t22: " << t22 << " t23: " << t23 << std::endl;
 
                 double c3 = (TargetDistance) -
                             (0.1666667 * Jerk * std::pow(t21, 3)) -
                             (CurrentVelocity * CurrentAcceleration / Jerk) -
                             (0.5 * CurrentAcceleration * std::pow(t21, 3) / Jerk) -
                             (0.5 * CurrentAcceleration * std::pow(t21, 2) / Jerk);
+                            
+                bool result = newtonRaphson3(
+                    t21, Jerk,
+                    CurrentVelocity, CurrentAcceleration,
+                    c3, t11, t22);
+                if (!result)
+                {
+                    std::cout << "Newton-Raphson 3 did not converge!" << std::endl;
+                }
 
-                std::vector<double> result = newtonRaphson3(t21, Jerk, CurrentVelocity,
-                                                            CurrentAcceleration, t11, c3,
-                                                            t11, t22);
-
-                t11 = result[0];
-                t22 = result[1];
+                std::cout << "Calculated t11: " << t11 << ", t22: " << t22 << std::endl;
                 t13 = (CurrentAcceleration / Jerk) + t11;
 
                 x11 = (0.1666667 * Jerk * std::pow(t11, 3)) +
@@ -602,21 +601,23 @@ void Profiler::CalculateShorterProfile()
 
                 a11 = (CurrentAcceleration + (Jerk * t11));
 
+                t12 = 0.0;
                 x12 = 0.0;
                 v12 = v11;
                 a12 = a11;
 
                 x13 = (v12 * t13) + (0.5 * a12 * std::pow(t13, 2)) -
-                                               (0.1666667 * Jerk * std::pow(t13, 3));
+                        (0.1666667 * Jerk * std::pow(t13, 3));
+
                 a13 = (a12 - (Jerk * t13));
-                v13 = (v12 + (a12 * t13)) - (0.5 * Jerk * std::pow(t13, 2));
+                v13 = (v12) + (a12 * t13) - (0.5 * Jerk * std::pow(t13, 2));
 
                 x21 = (v13 * t21) - (0.1666667 * Jerk * std::pow(t21, 3));
                 v21 = (v13 - (0.5 * Jerk * std::pow(t21, 2)));
                 a21 = -(Jerk * t21);
 
                 x22 = (v21 * t22) + (0.5 * a21 * std::pow(t22, 2));
-                v22 = (v21 + (a21 * t22));
+                v22 = (v21) + (a21 * t22);
                 a22 = a21;
 
                 x23 = (v22 * t23) + (0.5 * a22 * std::pow(t23, 2)) +
@@ -802,10 +803,12 @@ void Profiler::CalculatePositionProfile()
 
     if (t12 < 0.0)
     {
+        std::cout << "t12 < 0.0, adjusting profile" << std::endl;
         t12 = 0.0;
     }
     if (t22 < 0.0)
     {
+        std::cout << "t22 < 0.0, adjusting profile" << std::endl;
         t22 = 0.0;
     }
 
@@ -868,6 +871,11 @@ void Profiler::CalculatePositionProfile()
     {
         std::cout << "Need to adjust profile to fit target distance" << std::endl;
         CalculateShorterProfile();
+        if (x11 < 0.0 || x12 < 0.0 || x13 < 0.0 ||
+            x21 < 0.0 || x22 < 0.0 || x23 < 0.0)
+        {
+            std::cout << "Error in profile calculation, one of the segments is negative!" << std::endl;
+        }
     }
     
     // std::cout << "----------------------------  RESULT  ----------------------------" << std::endl;

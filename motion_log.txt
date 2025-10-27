@@ -1,0 +1,19 @@
+==================== MOTION LOG ====================
+Log Reason: Current acceleration exceeded max acceleration/deceleration during motion.
+CurrentPosition: 0.0501284 | CurrentAcceleration: 68.0098
+Target Position: 8.14413
+maxVelocity: 20 | maxAcceleration: 68 | maxDeceleration: 96 | Jerk: 1025
+-- Time Parameters --
+t11: 0.0663415, t12: 0.227776, t13: 0.0663415
+t21: 0.0936585, t22: 0.114675, t23: 0.0936585
+-- Position Distances --
+x11: 0.0498802, x12: 2.27776, x13: 1.27695
+x21: 1.73282, x22: 1.14675, x23: 0.140351
+-- Velocity Values --
+v11: 2.25561, v12: 17.7444, v13: 20
+v21: 15.5044, v22: 4.49561, v23: -8.88178e-16
+-- Acceleration Values --
+a11: 68, a12: 68, a13: 0
+a21: -96, a22: -96, a23: 0
+====================================================
+

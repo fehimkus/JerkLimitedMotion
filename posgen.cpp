@@ -15,10 +15,13 @@
 
 // Global variables
 Profiler profiler;
+std::ofstream logFile("motion_log.txt", std::ios::app); // append mode
 std::atomic<bool> is_running{false};
 std::atomic<double> deltaTime{0.0};
 unsigned int cycle_time_us = 100'000; // 100 ms default
 double prev_cycle_time = 0.0;
+const double tolerance = 0.003;
+
 
 std::vector<float> time_data, position_data, velocity_data, acceleration_data;
 constexpr int MAX_DATA_POINTS = 20000;
@@ -34,6 +37,43 @@ std::mt19937 gen(rd());
 std::uniform_real_distribution<double> posDist(-10.0, 10.0);
 std::uniform_int_distribution<int> velDist(5, 30);
 std::uniform_int_distribution<int> accDist(30, 100);
+
+void write_log(std::string reason)
+{
+
+    if (logFile.is_open())
+    {
+        logFile << "==================== MOTION LOG ====================\n";
+        logFile << "Log Reason: " << reason << "\n";
+        logFile << "CurrentPosition: " << profiler.CurrentPosition
+                << " | CurrentAcceleration: " << profiler.CurrentAcceleration << "\n";
+        
+        logFile << "Target Position: " << profiler.TargetPosition << "\n";
+        logFile << "maxVelocity: " << profiler.MaxVelocity
+                << " | maxAcceleration: " << profiler.MaxAcceleration
+                << " | maxDeceleration: " << profiler.MaxDeceleration
+                << " | Jerk: " << profiler.Jerk << "\n";
+
+        logFile << "-- Time Parameters --\n";
+        logFile << "t11: " << profiler.t11 << ", t12: " << profiler.t12 << ", t13: " << profiler.t13 << "\n";
+        logFile << "t21: " << profiler.t21 << ", t22: " << profiler.t22 << ", t23: " << profiler.t23 << "\n";
+
+        logFile << "-- Position Distances --\n";
+        logFile << "x11: " << profiler.x11 << ", x12: " << profiler.x12 << ", x13: " << profiler.x13 << "\n";
+        logFile << "x21: " << profiler.x21 << ", x22: " << profiler.x22 << ", x23: " << profiler.x23 << "\n";
+
+        logFile << "-- Velocity Values --\n";
+        logFile << "v11: " << profiler.v11 << ", v12: " << profiler.v12 << ", v13: " << profiler.v13 << "\n";
+        logFile << "v21: " << profiler.v21 << ", v22: " << profiler.v22 << ", v23: " << profiler.v23 << "\n";
+
+        logFile << "-- Acceleration Values --\n";
+        logFile << "a11: " << profiler.a11 << ", a12: " << profiler.a12 << ", a13: " << profiler.a13 << "\n";
+        logFile << "a21: " << profiler.a21 << ", a22: " << profiler.a22 << ", a23: " << profiler.a23 << "\n";
+
+        logFile << "====================================================\n\n";
+        logFile.close();
+    }
+}
 
 // Function to calculate plot bounds based on input parameters
 void calculatePlotBounds(double &pos_min, double &pos_max,
@@ -193,6 +233,37 @@ void my_task()
             velocity_data.erase(velocity_data.begin());
             acceleration_data.erase(acceleration_data.begin());
         }
+        
+        if (profiler.stage == 40)
+        {
+            if (profiler.CurrentVelocity > profiler.MaxVelocity + tolerance)
+            {
+                std::cout << "current velocity: " << profiler.CurrentVelocity << std::endl;
+                write_log("Current velocity exceeded max velocity during cruise phase.");
+            }
+        }
+        else if (profiler.stage >= 10 && profiler.stage < 40)
+        {
+            if (std::fabs(profiler.CurrentAcceleration) > std::fabs(profiler.MaxAcceleration) + tolerance)
+            {
+                write_log("Current acceleration exceeded max acceleration/deceleration during motion.");
+            }
+        }
+        else if (profiler.stage > 40)
+        {
+            if (std::fabs(profiler.CurrentAcceleration) > std::fabs(profiler.MaxDeceleration) + tolerance)
+            {
+                write_log("Current deceleration exceeded max deceleration during motion.");
+            }
+        }
+        else
+        {
+            if(fabs(profiler.CurrentPosition) > (profiler.TargetDistance + tolerance))
+            {
+                write_log("Current position exceeded target position during motion.");
+            }
+        }
+        
     }
 }
 
@@ -232,17 +303,20 @@ void resetData()
     deltaTime = 0.0;
 }
 
+
 void randomizeParameters()
 {
     is_running = true;
     if (profiler.stage == 0)
     {
+
         resetData();
         profiler.TargetPosition = posDist(gen);
         profiler.MaxVelocity = velDist(gen);
         profiler.MaxAcceleration = accDist(gen);
         profiler.MaxDeceleration = accDist(gen);
         profiler.Jerk = ((profiler.MaxAcceleration + profiler.MaxDeceleration) / 2.0) * 12.5;
+
 
         profiler.TargetDistance = std::fabs(profiler.TargetPosition - profiler.CurrentPosition);
         profiler.direction = (profiler.TargetPosition - profiler.CurrentPosition < 0) ? -1 : 1;
@@ -252,49 +326,7 @@ void randomizeParameters()
         prev_cycle_time = 0.0;
         deltaTime = 0.0;
     }
-    else
-    {
-        if (profiler.CurrentAcceleration != 0.0 &&
-            profiler.CurrentPosition != profiler.TargetPosition)
-        {
-            std::ofstream logFile("motion_log.txt", std::ios::app); // append mode
-            if (logFile.is_open())
-            {
-                logFile << "==================== MOTION LOG ====================\n";
-                logFile << "CurrentPosition: " << profiler.CurrentPosition
-                        << " | CurrentAcceleration: " << profiler.CurrentAcceleration << "\n";
-                
-                logFile << "Target Position: " << profiler.TargetPosition << "\n";
-                logFile << "maxVelocity: " << profiler.MaxVelocity
-                        << " | maxAcceleration: " << profiler.MaxAcceleration
-                        << " | maxDeceleration: " << profiler.MaxDeceleration
-                        << " | Jerk: " << profiler.Jerk << "\n";
 
-                logFile << "-- Time Parameters --\n";
-                logFile << "t11: " << profiler.t11 << ", t12: " << profiler.t12 << ", t13: " << profiler.t13 << "\n";
-                logFile << "t21: " << profiler.t21 << ", t22: " << profiler.t22 << ", t23: " << profiler.t23 << "\n";
-
-                logFile << "-- Position Distances --\n";
-                logFile << "x11: " << profiler.x11 << ", x12: " << profiler.x12 << ", x13: " << profiler.x13 << "\n";
-                logFile << "x21: " << profiler.x21 << ", x22: " << profiler.x22 << ", x23: " << profiler.x23 << "\n";
-
-                logFile << "-- Velocity Values --\n";
-                logFile << "v11: " << profiler.v11 << ", v12: " << profiler.v12 << ", v13: " << profiler.v13 << "\n";
-                logFile << "v21: " << profiler.v21 << ", v22: " << profiler.v22 << ", v23: " << profiler.v23 << "\n";
-
-                logFile << "-- Acceleration Values --\n";
-                logFile << "a11: " << profiler.a11 << ", a12: " << profiler.a12 << ", a13: " << profiler.a13 << "\n";
-                logFile << "a21: " << profiler.a21 << ", a22: " << profiler.a22 << ", a23: " << profiler.a23 << "\n";
-
-                logFile << "====================================================\n\n";
-                logFile.close();
-            }
-            else
-            {
-                std::cerr << "Error: Cannot open log file!" << std::endl;
-            }
-        }
-    }
 
 }
 
@@ -315,11 +347,11 @@ void drawReferenceLine(double value, const ImVec4 &color)
 int main()
 {
     // Profiler başlangıç değerleri
-    profiler.TargetPosition = 2.0;
-    profiler.MaxVelocity = 10.0;
-    profiler.MaxAcceleration = 90.0;
-    profiler.MaxDeceleration = 90.0;
-    profiler.Jerk = 1000.0;
+    profiler.TargetPosition = 0.735;
+    profiler.MaxVelocity = 18.0;
+    profiler.MaxAcceleration = 96.0;
+    profiler.MaxDeceleration = 49.0;
+    profiler.Jerk = 906.250;
 
     profiler.CurrentPosition = 0.0;
     profiler.CurrentVelocity = 0.0;
@@ -441,7 +473,6 @@ int main()
             ImGui::InputDouble("Max Acceleration", &profiler.MaxAcceleration, 1.0, 10.0, "%.3f");
             ImGui::InputDouble("Max Deceleration", &profiler.MaxDeceleration, 1.0, 10.0, "%.3f");
             ImGui::InputDouble("Jerk", &profiler.Jerk, 10.0, 100.0, "%.3f");
-
             ImGui::Spacing();
             ImGui::Separator();
             ImGui::Spacing();
@@ -452,18 +483,23 @@ int main()
                 startMotion();
             }
             ImGui::SameLine();
+
             if (ImGui::Button("STOP", ImVec2(120, 40)))
             {
                 rnd_thread_active = false;
-                rnd_thread.join();
                 stopMotion();
             }
 
             ImGui::Spacing();
             if (ImGui::Button("RANDOMIZE", ImVec2(120, 40)))
             {
-                // Toggle background randomizer thread
+                // Clear and reopen logfile before starting randomization
+                logFile.close();
+                logFile.open("motion_log.txt", std::ios::trunc);
+                logFile.close();
+                logFile.open("motion_log.txt", std::ios::app);
 
+                // Toggle background randomizer thread
                 if (!rnd_thread_active.load())
                 {
                     rnd_thread_active = true;

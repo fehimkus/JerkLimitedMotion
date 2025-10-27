@@ -9,21 +9,9 @@
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
-            "environment": [
-                {
-                    "name": "DISPLAY",
-                    "value": ":0"
-                }
-            ],
-            "externalConsole": true,
-            "MIMode": "lldb",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for LLDB",
-                    "text": "settings set target.import-std-module true",
-                    "ignoreFailures": true
-                }
-            ]
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb"
         }
     ]
 }

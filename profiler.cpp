@@ -1,6 +1,6 @@
 #include "profiler.h"
 
-bool solveQuadratic(double a, double b, double c, double &x1, double &x2)
+bool Profiler::solveQuadratic(double a, double b, double c, double &x1, double &x2)
 {
     double discriminant = b * b - 4 * a * c;
 
@@ -18,7 +18,7 @@ bool solveQuadratic(double a, double b, double c, double &x1, double &x2)
     return true;
 }
 
-inline void solve2x2System(const double A[2][2], const double b[2], double x[2])
+void Profiler::solve2x2System(const double A[2][2], const double b[2], double x[2])
 {
     const double det = A[0][0] * A[1][1] - A[0][1] * A[1][0];
 
@@ -35,7 +35,7 @@ inline void solve2x2System(const double A[2][2], const double b[2], double x[2])
 }
 
 // Compute the system of equations (optimized)
-inline void computeSystem1(const double x[2], double f[2],
+void Profiler::computeSystem1(const double x[2], double f[2],
                            double t11, double t13, double t21, double a11,
                            double V11, double J, double c)
 {
@@ -51,7 +51,7 @@ inline void computeSystem1(const double x[2], double f[2],
            c;
 }
 
-inline void computeJacobian1(const double x[2], double J_mat[2][2],
+void Profiler::computeJacobian1(const double x[2], double J_mat[2][2],
                              double t11, double t21, double a11,
                              double V11, double J, double t13)
 {
@@ -69,11 +69,11 @@ inline void computeJacobian1(const double x[2], double J_mat[2][2],
     J_mat[1][1] = V11 + a11 * t12 + a11 * t13;         // ∂f2/∂t12
 }
 
-std::vector<double> newtonRaphson1(double t11, double t13, double t21,
+std::vector<double> Profiler::newtonRaphson1(double t11, double t13, double t21,
                                    double a11, double V11, double J,
                                    double c, double t22_initial,
-                                   double t12_initial, double tol = 1e-6,
-                                   int max_iter = 100)
+                                   double t12_initial, double tol,
+                                   int max_iter)
 {
     double x[2] = {t22_initial, t12_initial};
     double f[2];
@@ -113,7 +113,7 @@ std::vector<double> newtonRaphson1(double t11, double t13, double t21,
 // Compute the Jacobian matrix (optimized)
 
 // Compute the system of equations (optimized)
-inline void computeSystem2(const double x[2], double f[2],
+void Profiler::computeSystem2(const double x[2], double f[2],
                            double t11, double t13, double a11, double V11, double J, double c)
 {
     const double t21 = x[0];
@@ -127,7 +127,7 @@ inline void computeSystem2(const double x[2], double f[2],
 }
 
 // Solve 2x2 linear system directly (optimized for small system)
-inline void computeJacobian2(const double x[2], double J[2][2],
+void Profiler::computeJacobian2(const double x[2], double J[2][2],
                              double t11, double t13, double a11, double V11, double J_param)
 {
     const double t21 = x[0];
@@ -143,10 +143,10 @@ inline void computeJacobian2(const double x[2], double J[2][2],
 }
 
 // Optimized Newton-Raphson method for 2D system
-std::vector<double> newtonRaphson2(double t11, double t13, double a11, double V11,
+std::vector<double> Profiler::newtonRaphson2(double t11, double t13, double a11, double V11,
                                    double J, double c, double t21_initial,
-                                   double t12_initial, double tol = 1e-6,
-                                   int max_iter = 100)
+                                   double t12_initial, double tol,
+                                   int max_iter)
 {
     double x[2] = {t21_initial, t12_initial};
     double f[2];
@@ -181,78 +181,94 @@ std::vector<double> newtonRaphson2(double t11, double t13, double a11, double V1
     return {x[0], x[1]};
 }
 
-inline void computeSystem3(const double x[2], double f[2],
-                           double t21, double J, double Vcurr,
-                           double acurr, double t1, double c)
+
+
+void Profiler::computeSystem3(double f[2],
+                              double t21, double J, double Vcurr,
+                              double acurr, double c)
 {
-    const double t11 = x[0];
-    const double t22 = x[1];
-    // First equation: // J*t21^2 + J*t21*t22 = Vcurr + acurr*t11 + 0.5*J*t11^2 + // acurr*t1 + 0.5*J*t1^2 + 0.5*acurr^2/J
-    f[0] = (J * t21 * t21 + J * t21 * t22) -
-           (Vcurr + acurr * t11 + 0.5 * J * t11 * t11 +
-            acurr * t1 + 0.5 * J * t1 * t1 + 0.5 * acurr * acurr / J);
-    // Second equation: // c = (acurr^2*t11/J) + 2.5*acurr*t11^2 + Vcurr*t11 + 1.33334*J*t11^3 + // 1.5*J*t21^2*t22 + 0.5*J*t21*t22^2
-    f[1] = (acurr * acurr * t11 / J + 2.5 * acurr * t11 * t11 +
-            Vcurr * t11 + 1.33334 * J * t11 * t11 * t11 +
-            1.5 * J * t21 * t21 * t22 + 0.5 * J * t21 * t22 * t22) - c;
+    // t13 doğrudan class içi t11 ile hesaplanır
+    double t13 = t11 + (acurr / J);
+
+    // First equation (orijinal denklem):
+    // J*t21^2 + J*t21*t22 = Vcurr + acurr*t11 + 0.5*J*t11^2 + acurr*t13 + 0.5*J*t13^2 + 0.5*acurr^2/J
+    f[0] = (J * t21 * t21 + J * t21 * t22)
+         - (Vcurr + acurr * t11 + 0.5 * J * t11 * t11
+            + acurr * t13 + 0.5 * J * t13 * t13
+            + 0.5 * (acurr * acurr / J));
+    
+    // Second equation (orijinal denklem):
+    // c = (acurr^2*t11/J) + 2.5*acurr*t11^2 + Vcurr*t11 + 1.33334*J*t11^3 +
+    //      1.5*J*t21^2*t22 + 0.5*J*t21*t22^2
+    f[1] = (acurr * acurr * t11 / J)
+         + 2.5 * acurr * t11 * t11
+         + Vcurr * t11
+         + (4.0/3.0) * J * t11 * t11 * t11  // 1.33334 yerine 4/3
+         + 1.5 * J * t21 * t21 * t22
+         + 0.5 * J * t21 * t22 * t22
+         - c;
 }
 
-inline void computeJacobian3(const double x[2], double J_mat[2][2],
-                             double t21, double J, double Vcurr,
-                             double acurr, double t1)
+void Profiler::computeJacobian3(double J_mat[2][2],
+                                double t21, double J, double Vcurr,
+                                double acurr)
 {
-    const double t11 = x[0];
-    const double t22 = x[1];
+    // ----------- df1/dt11 -----------
+    // f1 = J*t21^2 + J*t21*t22 - [Vcurr + acurr*t11 + 0.5*J*t11^2 + acurr*t13 + 0.5*J*t13^2 + 0.5*acurr^2/J]
+    // t13 = t11 + acurr/J olduğundan dt13/dt11 = 1
+    // df1/dt11 = -acurr - J*t11 - acurr - J*t13
+    //          = -2*acurr - J*t11 - J*(t11 + acurr/J)
+    //          = -2*acurr - J*t11 - J*t11 - acurr
+    //          = -3*acurr - 2*J*t11
+    double t13 = t11 + (acurr / J);
+    J_mat[0][0] = -acurr - J * t11 - acurr - J * t13;
+    
+    // ----------- df1/dt22 -----------
+    // f1 = J*t21^2 + J*t21*t22 - [...]
+    // df1/dt22 = J*t21
+    J_mat[0][1] = J * t21;
 
-    J_mat[0][0] = -acurr - J * t11;
-    J_mat[0][1] =  J * t21;
+    // ----------- df2/dt11 -----------
+    // f2 = (acurr^2*t11/J) + 2.5*acurr*t11^2 + Vcurr*t11 + (4/3)*J*t11^3 + ... - c
+    // df2/dt11 = acurr^2/J + 5*acurr*t11 + Vcurr + 4*J*t11^2
+    J_mat[1][0] = (acurr * acurr / J)
+                + 5.0 * acurr * t11
+                + Vcurr
+                + 4.0 * J * t11 * t11;
 
-    J_mat[1][0] = acurr * acurr / J + 5.0 * acurr * t11 +
-                  Vcurr + 4.0 * J * t11 * t11;
+    // ----------- df2/dt22 -----------
+    // f2 = ... + 1.5*J*t21^2*t22 + 0.5*J*t21*t22^2 + ... - c
+    // df2/dt22 = 1.5*J*t21^2 + J*t21*t22
     J_mat[1][1] = 1.5 * J * t21 * t21 + J * t21 * t22;
 }
 
-// Returns true if converged, false if failed
-bool newtonRaphson3(double t21, double J, double Vcurr,
-                    double acurr, double c,
-                    double &t11, double &t22,
-                    double tol = 1e-6, int max_iter = 100)
+bool Profiler::newtonRaphson3(double t21, double J, double Vcurr,
+                              double acurr, double c,
+                              double tol, int max_iter)
 {
-    // --- Security checks ---
-    if (J <= 0.0 || t21 < 0.0 || t11 < 0.0 || t22 < 0.0)
-        return false;
-
-    double x[2] = {t11, t22};
-    double f[2], J_mat[2][2], dx[2], minus_f[2];
+    double f[2], J_mat[2][2], dx[2];
 
     for (int iter = 0; iter < max_iter; ++iter)
     {
-        computeSystem3(x, f, t21, J, Vcurr, acurr, t11, c);
+        computeSystem3(f, t21, J, Vcurr, acurr, c);
 
-        // Check convergence
-        if (f[0]*f[0] + f[1]*f[1] < tol * tol)
-        {
-            t11 = std::max(0.0, x[0]);
-            t22 = std::max(0.0, x[1]);
+        if (f[0] * f[0] + f[1] * f[1] < tol * tol)
             return true;
-        }
 
-        computeJacobian3(x, J_mat, t21, J, Vcurr, acurr, t11);
+        computeJacobian3(J_mat, t21, J, Vcurr, acurr);
 
-        minus_f[0] = -f[0];
-        minus_f[1] = -f[1];
-
+        double minus_f[2] = {-f[0], -f[1]};
         solve2x2System(J_mat, minus_f, dx);
 
-        x[0] += dx[0];
-        x[1] += dx[1];
+        // x[0] ve x[1] yerine artık direkt class member güncelleniyor
+        t11 += dx[0];
+        t22 += dx[1];
 
-        // Enforce constraints (time ≥ 0)
-        if (x[0] < 0.0) x[0] = 0.0;
-        if (x[1] < 0.0) x[1] = 0.0;
+        if (t11 < 0.0) t11 = 0.0;
+        if (t22 < 0.0) t22 = 0.0;
     }
 
-    return false; // Not converged
+    return false;
 }
 
 
@@ -493,9 +509,9 @@ void Profiler::CalculateShorterProfile()
         double a22_modified_t2 = a21_modified_t2;
 
         double x23_modified_t2 = (v22_modified_t2 * t13) +
-                                 (0.5 * a22_modified_t2 * std::pow(t13, 2)) -
+                                 (0.5 * a22_modified_t2 * std::pow(t13, 2)) +
                                  (0.1666667 * Jerk * std::pow(t13, 3));
-        double v23_modified_t2 = (v22_modified_t2 + (a22_modified_t2 * t13)) -
+        double v23_modified_t2 = (v22_modified_t2 + (a22_modified_t2 * t13)) +
                                  (0.5 * Jerk * std::pow(t13, 2));
         double a23_modified_t2 = (a22_modified_t2 + (Jerk * t13));
 
@@ -508,12 +524,10 @@ void Profiler::CalculateShorterProfile()
                                            (0.5 * CurrentAcceleration * std::pow(t11, 2)) +
                                            (CurrentVelocity * t11);
 
-            v11 = (CurrentVelocity +
-                                            (CurrentAcceleration * t11) +
+            v11 = (CurrentVelocity + (CurrentAcceleration * t11) +
                                             (0.5 * Jerk * std::pow(t11, 2)));
 
-            a11 = (CurrentAcceleration +
-                                            (Jerk * t11));
+            a11 = (CurrentAcceleration + (Jerk * t11));
 
             double c2 = (TargetDistance) -
                         x11 - (v11 * t13) -
@@ -560,9 +574,9 @@ void Profiler::CalculateShorterProfile()
             double a21_no_t2 = (CurrentAcceleration +
                                 (Jerk * t21));
             double x23_no_t2 = (v21_no_t2 * t13) +
-                               (0.5 * a21_no_t2 * std::pow(t13, 2)) -
+                               (0.5 * a21_no_t2 * std::pow(t13, 2)) +
                                (0.1666667 * Jerk * std::pow(t13, 3));
-            double v23_no_t2 = (v21_no_t2 + (a21_no_t2 * t13)) -
+            double v23_no_t2 = (v21_no_t2 + (a21_no_t2 * t13)) +
                                (0.5 * Jerk * std::pow(t13, 2));
             double a23_no_t2 = (a21_no_t2 + (Jerk * t13));
             double min_distance2 = 2 * (x21_no_t2 + x23_no_t2);
@@ -574,19 +588,28 @@ void Profiler::CalculateShorterProfile()
                 std::cout << "TODO: Target position is enough to reach max acceleration from one side" << std::endl;
                 std::cout << "t11: " << t11 << ", t12: " << t12 << " t13: " << t13 << " t21: " << t21 << " t22: " << t22 << " t23: " << t23 << std::endl;
 
+                // double c3 = (TargetDistance) - 
+                //             (CurrentVelocity * CurrentAcceleration / Jerk) -
+                //             (std::pow(CurrentAcceleration, 3) / (3 * std::pow(Jerk, 2))) -
+                //             (CurrentVelocity * (t21 + t23)) -
+                //             ((std::pow(CurrentAcceleration, 2) / (2 * Jerk)) * (t21 + t23)) -
+                //             (0.5 * Jerk * std::pow(t21, 2) * t23) -
+                //             (0.5 * Jerk * t21 * std::pow(t23, 2));
                 double c3 = (TargetDistance) -
-                            (0.1666667 * Jerk * std::pow(t21, 3)) -
-                            (CurrentVelocity * CurrentAcceleration / Jerk) -
-                            (0.5 * CurrentAcceleration * std::pow(t21, 3) / Jerk) -
-                            (0.5 * CurrentAcceleration * std::pow(t21, 2) / Jerk);
-                            
+                (0.16667f * Jerk * std::pow(t21, 3)) -
+                (CurrentVelocity * CurrentAcceleration / Jerk) -
+                (0.5f * CurrentAcceleration * std::pow(t21, 3) / Jerk) -
+                (0.5f * CurrentAcceleration * std::pow(t21, 2) / Jerk);
+                
+                            std::cout << "target distance: " << TargetDistance << std::endl;
+                            std::cout << "c3: " << c3 << std::endl;
                 bool result = newtonRaphson3(
                     t21, Jerk,
                     CurrentVelocity, CurrentAcceleration,
-                    c3, t11, t22);
+                    c3);
                 if (!result)
                 {
-                    std::cout << "Newton-Raphson 3 did not converge!" << std::endl;
+                    std::cout << "Newton-Raphson 3 did not conv1erge!" << std::endl;
                 }
 
                 std::cout << "Calculated t11: " << t11 << ", t22: " << t22 << std::endl;

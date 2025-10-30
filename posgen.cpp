@@ -71,7 +71,6 @@ void write_log(std::string reason)
         logFile << "a21: " << profiler.a21 << ", a22: " << profiler.a22 << ", a23: " << profiler.a23 << "\n";
 
         logFile << "====================================================\n\n";
-        logFile.close();
     }
 }
 
@@ -97,6 +96,7 @@ void calculatePlotBounds(double &pos_min, double &pos_max,
     acc_min = -profiler.MaxDeceleration * 1.1; // 10% margin for deceleration
     acc_max = profiler.MaxAcceleration * 1.1;  // 10% margin for acceleration
 }
+
 
 // ESKİ YAPIDAKİ TRAJECTORY GENERATION MANTIĞI
 void *positionGenerator()
@@ -147,7 +147,7 @@ void *positionGenerator()
         break;
 
     case 40: // Cruise
-        if ((fabs(profiler.TargetPosition - profiler.CurrentPosition)) <= ((profiler.x21 + profiler.x22 + profiler.x23)* 1.001))
+        if ((fabs(profiler.TargetPosition - profiler.CurrentPosition)) <= (profiler.x21 + profiler.x22 + profiler.x23))
         {
             profiler.stage = 50;
         }
@@ -186,7 +186,6 @@ void *positionGenerator()
             profiler.CurrentAcceleration = 0;
             profiler.CurrentPosition = profiler.TargetPosition;
             profiler.stage = 0;
-            is_running = false;
         }
         else
         {
@@ -208,6 +207,70 @@ void *positionGenerator()
 
     prev_cycle_time = discreteTime;
     return nullptr;
+}
+
+
+void startMotion()
+{
+    is_running = true;
+
+    // ESKİ YAPIDAKİ PROFİL HESAPLAMA
+    profiler.TargetDistance = std::fabs(profiler.TargetPosition - profiler.CurrentPosition);
+    profiler.direction = (profiler.TargetPosition - profiler.CurrentPosition < 0) ? -1 : 1;
+    profiler.CalculatePositionProfile();
+    profiler.begin = std::chrono::high_resolution_clock::now();
+    profiler.stage = 10;
+    prev_cycle_time = 0.0;
+    deltaTime = 0.0;
+    std::cout << "Motion started - Target: " << profiler.TargetPosition << std::endl;
+}
+
+void stopMotion()
+{
+    is_running = false;
+    profiler.stage = 0;
+    logFile.close();
+    std::cout << "Motion stopped" << std::endl;
+}
+
+void resetData()
+{
+    time_data.clear();
+    position_data.clear();
+    velocity_data.clear();
+    acceleration_data.clear();
+    current_time = 0.0f;
+    profiler.CurrentPosition = 0.0;
+    profiler.CurrentVelocity = 0.0;
+    profiler.CurrentAcceleration = 0.0;
+    prev_cycle_time = 0.0;
+    deltaTime = 0.0;
+}
+
+
+void randomizeParameters()
+{
+    if (profiler.stage == 0 && is_running)
+    {
+        usleep(2000000); 
+        resetData();
+        profiler.TargetPosition = posDist(gen);
+        profiler.MaxVelocity = velDist(gen);
+        profiler.MaxAcceleration = accDist(gen);
+        profiler.MaxDeceleration = accDist(gen);
+        profiler.Jerk = ((profiler.MaxAcceleration + profiler.MaxDeceleration) / 2.0) * 12.5;
+
+
+        profiler.TargetDistance = std::fabs(profiler.TargetPosition - profiler.CurrentPosition);
+        profiler.direction = (profiler.TargetPosition - profiler.CurrentPosition < 0) ? -1 : 1;
+        profiler.CalculatePositionProfile();
+        profiler.begin = std::chrono::high_resolution_clock::now();
+        profiler.stage = 10;
+        prev_cycle_time = 0.0;
+        deltaTime = 0.0;
+    }
+
+
 }
 
 // Periodic task - AYRI THREAD'DE ÇALIŞACAK
@@ -236,29 +299,28 @@ void my_task()
         
         if (profiler.stage == 40)
         {
-            if (profiler.CurrentVelocity > profiler.MaxVelocity + tolerance)
+            if (profiler.CurrentVelocity > profiler.MaxVelocity)
             {
-                std::cout << "current velocity: " << profiler.CurrentVelocity << std::endl;
                 write_log("Current velocity exceeded max velocity during cruise phase.");
             }
         }
         else if (profiler.stage >= 10 && profiler.stage < 40)
         {
-            if (std::fabs(profiler.CurrentAcceleration) > std::fabs(profiler.MaxAcceleration) + tolerance)
+            if (std::fabs(profiler.CurrentAcceleration) > std::fabs(profiler.MaxAcceleration))
             {
                 write_log("Current acceleration exceeded max acceleration/deceleration during motion.");
             }
         }
         else if (profiler.stage > 40)
         {
-            if (std::fabs(profiler.CurrentAcceleration) > std::fabs(profiler.MaxDeceleration) + tolerance)
+            if (std::fabs(profiler.CurrentAcceleration) > std::fabs(profiler.MaxDeceleration))
             {
                 write_log("Current deceleration exceeded max deceleration during motion.");
             }
         }
         else
         {
-            if(fabs(profiler.CurrentPosition) > (profiler.TargetDistance + tolerance))
+            if(fabs(profiler.CurrentPosition) > (profiler.TargetDistance))
             {
                 write_log("Current position exceeded target position during motion.");
             }
@@ -267,68 +329,7 @@ void my_task()
     }
 }
 
-void startMotion()
-{
-    is_running = true;
 
-    // ESKİ YAPIDAKİ PROFİL HESAPLAMA
-    profiler.TargetDistance = std::fabs(profiler.TargetPosition - profiler.CurrentPosition);
-    profiler.direction = (profiler.TargetPosition - profiler.CurrentPosition < 0) ? -1 : 1;
-    profiler.CalculatePositionProfile();
-    profiler.begin = std::chrono::high_resolution_clock::now();
-    profiler.stage = 10;
-    prev_cycle_time = 0.0;
-    deltaTime = 0.0;
-    std::cout << "Motion started - Target: " << profiler.TargetPosition << std::endl;
-}
-
-void stopMotion()
-{
-    is_running = false;
-    profiler.stage = 0;
-    std::cout << "Motion stopped" << std::endl;
-}
-
-void resetData()
-{
-    time_data.clear();
-    position_data.clear();
-    velocity_data.clear();
-    acceleration_data.clear();
-    current_time = 0.0f;
-    profiler.CurrentPosition = 0.0;
-    profiler.CurrentVelocity = 0.0;
-    profiler.CurrentAcceleration = 0.0;
-    prev_cycle_time = 0.0;
-    deltaTime = 0.0;
-}
-
-
-void randomizeParameters()
-{
-    is_running = true;
-    if (profiler.stage == 0)
-    {
-
-        resetData();
-        profiler.TargetPosition = posDist(gen);
-        profiler.MaxVelocity = velDist(gen);
-        profiler.MaxAcceleration = accDist(gen);
-        profiler.MaxDeceleration = accDist(gen);
-        profiler.Jerk = ((profiler.MaxAcceleration + profiler.MaxDeceleration) / 2.0) * 12.5;
-
-
-        profiler.TargetDistance = std::fabs(profiler.TargetPosition - profiler.CurrentPosition);
-        profiler.direction = (profiler.TargetPosition - profiler.CurrentPosition < 0) ? -1 : 1;
-        profiler.CalculatePositionProfile();
-        profiler.begin = std::chrono::high_resolution_clock::now();
-        profiler.stage = 10;
-        prev_cycle_time = 0.0;
-        deltaTime = 0.0;
-    }
-
-
-}
 
 // Function to draw reference lines using ImPlot's native functions
 void drawReferenceLine(double value, const ImVec4 &color)
@@ -498,6 +499,7 @@ int main()
                 logFile.open("motion_log.txt", std::ios::trunc);
                 logFile.close();
                 logFile.open("motion_log.txt", std::ios::app);
+                is_running = true;
 
                 // Toggle background randomizer thread
                 if (!rnd_thread_active.load())
@@ -562,6 +564,7 @@ int main()
             ImGui::Text("x21: %.3f", profiler.x21); ImGui::SameLine(0, 20);
             ImGui::Text("x22: %.3f", profiler.x22); ImGui::SameLine(0, 20);
             ImGui::Text("x23: %.3f", profiler.x23);
+            ImGui::Text("itogo: %.3f", profiler.x11 + profiler.x12 + profiler.x13 + profiler.x21 + profiler.x22 + profiler.x23);
 
             ImGui::Text("Velocity Parameters:");
             ImGui::Text("v11: %.3f", profiler.v11); ImGui::SameLine(0, 20);

@@ -35,8 +35,9 @@ constexpr int WINDOW_HEIGHT = 800;
 std::random_device rd;
 std::mt19937 gen(rd());
 std::uniform_real_distribution<double> posDist(-10.0, 10.0);
-std::uniform_int_distribution<int> velDist(5, 30);
-std::uniform_int_distribution<int> accDist(30, 100);
+std::uniform_int_distribution<int> velDist(1, 30);
+std::uniform_int_distribution<int> accDist(30, 500);
+std::uniform_int_distribution<int> jerkDist(300, 1000);
 
 void write_log(std::string reason)
 {
@@ -258,7 +259,7 @@ void randomizeParameters()
         profiler.MaxVelocity = velDist(gen);
         profiler.MaxAcceleration = accDist(gen);
         profiler.MaxDeceleration = accDist(gen);
-        profiler.Jerk = ((profiler.MaxAcceleration + profiler.MaxDeceleration) / 2.0) * 12.5;
+        profiler.Jerk = jerkDist(gen);
 
 
         profiler.TargetDistance = std::fabs(profiler.TargetPosition - profiler.CurrentPosition);
@@ -348,11 +349,11 @@ void drawReferenceLine(double value, const ImVec4 &color)
 int main()
 {
     // Profiler başlangıç değerleri
-    profiler.TargetPosition = 0.735;
-    profiler.MaxVelocity = 18.0;
-    profiler.MaxAcceleration = 96.0;
-    profiler.MaxDeceleration = 49.0;
-    profiler.Jerk = 906.250;
+    profiler.TargetPosition = 2.526;
+    profiler.MaxVelocity = 1.000;
+    profiler.MaxAcceleration = 339.0;
+    profiler.MaxDeceleration = 373.0;
+    profiler.Jerk = 773.0;
 
     profiler.CurrentPosition = 0.0;
     profiler.CurrentVelocity = 0.0;

@@ -58,42 +58,38 @@ public:
 
     void CalculatePositionProfile();
     
-    bool newtonRaphson3(double t21, double J, double Vcurr,
-                        double acurr, double c,
-                        double tol = 1e-6, int max_iter = 100);
-    
-    void computeJacobian3(double J_mat[2][2],
-                                double t21, double J, double Vcurr,
-                                double acurr);
-    void computeSystem3(double f[2],
-                              double t21, double J, double Vcurr,
-                              double acurr, double c);
+
        
 
     bool solveCubic(double a, double b, double c, double d,
                     double& root1, double& root2, double& root3);
-                    
+
     bool solveQuadratic(double a, double b, double c,
                         double& root1, double& root2);
 
-    void solve2x2System(const double A[2][2], const double b[2], double x[2]);
-
+    bool solve2x2System(const double A[2][2], const double b[2], double x[2]);
 
 
     void computeSystem1(double f[2], double c);
 
     void computeJacobian1(double J_mat[2][2]);
 
-    bool newtonRaphson1(double c, double tol = 1e-6,
-                                       int max_iter = 100);         
+    bool newtonRaphson1(double c, double tol = 1e-6, int max_iter = 100);         
                                        
                                        
     void computeSystem2(double f[2], double c);
+
     void computeJacobian2(double J[2][2]);
 
-    bool newtonRaphson2(double c, double tol = 1e-6,
-                                   int max_iter = 100);
+    bool newtonRaphson2(double c, double tol = 1e-6, int max_iter = 100);
 
+
+    void computeSystem3(double f[2], double c);
+
+    void computeJacobian3(double J_mat[2][2]);
+
+    bool newtonRaphson3(double c, double tol = 1e-6, int max_iter = 100);
+    
 
 private:
     void CalculateShorterProfile();

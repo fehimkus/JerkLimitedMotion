@@ -35,28 +35,19 @@ void Profiler::solve2x2System(const double A[2][2], const double b[2], double x[
 }
 
 // Compute the system of equations (optimized)
-void Profiler::computeSystem1(const double x[2], double f[2],
-                           double t11, double t13, double t21, double a11,
-                           double V11, double J, double c)
+void Profiler::computeSystem1(double f[2], double c)
 {
-    const double t22 = x[0];
-    const double t12 = x[1];
-
     // First equation: t21² + t21*t22 = 0.5*t11² + t11*t12 + t11*t13 - 0.5*t13²
     f[0] = ((t21 * t21) + (t21 * t22)) - ((0.5 * t11 * t11) + (t11 * t12) + (t11 * t13) - (0.5 * t13 * t13));
 
     // Second equation: V11*t12 + 0.5*a11*t12² + a11*t12*t13 + 1.5*J*t21²*t22 + 0.5*J*t21*t22² = c
-    f[1] = ((V11 * t12) + (0.5 * a11 * t12 * t12) + (a11 * t12 * t13) +
-            (1.5 * J * t21 * t21 * t22) + (0.5 * J * t21 * t22 * t22)) -
+    f[1] = ((v11 * t12) + (0.5 * a11 * t12 * t12) + (a11 * t12 * t13) +
+            (1.5 * Jerk * t21 * t21 * t22) + (0.5 * Jerk * t21 * t22 * t22)) -
            c;
 }
 
-void Profiler::computeJacobian1(const double x[2], double J_mat[2][2],
-                             double t11, double t21, double a11,
-                             double V11, double J, double t13)
+void Profiler::computeJacobian1(double J_mat[2][2])
 {
-    const double t22 = x[0];
-    const double t12 = x[1];
 
     // Partial derivatives of the first equation:
     // f1 = t21² + t21*t22 - (0.5*t11² + t11*t12 + t11*t13 - 0.5*t13²)
@@ -65,36 +56,31 @@ void Profiler::computeJacobian1(const double x[2], double J_mat[2][2],
 
     // Partial derivatives of the second equation:
     // f2 = V11*t12 + 0.5*a11*t12² + a11*t12*t13 + 1.5*J*t21²*t22 + 0.5*J*t21*t22² - c
-    J_mat[1][0] = 1.5 * J * t21 * t21 + J * t21 * t22; // ∂f2/∂t22
-    J_mat[1][1] = V11 + a11 * t12 + a11 * t13;         // ∂f2/∂t12
+    J_mat[1][0] = 1.5 * Jerk * t21 * t21 + Jerk * t21 * t22; // ∂f2/∂t22
+    J_mat[1][1] = v11 + a11 * t12 + a11 * t13;         // ∂f2/∂t12
 }
 
-std::vector<double> Profiler::newtonRaphson1(double t11, double t13, double t21,
-                                   double a11, double V11, double J,
-                                   double c, double t22_initial,
-                                   double t12_initial, double tol,
-                                   int max_iter)
+bool Profiler::newtonRaphson1(double c, double tol, int max_iter)
 {
-    double x[2] = {t22_initial, t12_initial};
     double f[2];
     double J_mat[2][2];
     double dx[2];
     double minus_f[2];
 
+    
     for (int iter = 0; iter < max_iter; ++iter)
     {
-        computeSystem1(x, f, t11, t13, t21, a11, V11, J, c);
+        computeSystem1(f, c);
 
         // Check for convergence using squared L2 norm
         const double norm = f[0] * f[0] + f[1] * f[1];
         if (norm < tol * tol)
         {
-            std::cout << "Converged after " << iter << " iterations." << std::endl;
-            return {x[0], x[1]};
+            return true;
         }
 
         // Compute Jacobian
-        computeJacobian1(x, J_mat, t11, t21, a11, V11, J, t13);
+        computeJacobian1(J_mat);
 
         // Solve J*dx = -f
         minus_f[0] = -f[0];
@@ -102,53 +88,47 @@ std::vector<double> Profiler::newtonRaphson1(double t11, double t13, double t21,
         solve2x2System(J_mat, minus_f, dx);
 
         // Update solution
-        x[0] += dx[0];
-        x[1] += dx[1];
+        t22 = dx[0];
+        t12 = dx[1];
     }
+    return false;
 
-    std::cout << "Warning: Newton-Raphson did not converge after " << max_iter << " iterations." << std::endl;
-    return {x[0], x[1]};
 }
 
 // Compute the Jacobian matrix (optimized)
 
 // Compute the system of equations (optimized)
-void Profiler::computeSystem2(const double x[2], double f[2],
-                           double t11, double t13, double a11, double V11, double J, double c)
+void Profiler::computeSystem2(double f[2], double c)
 {
-    const double t21 = x[0];
-    const double t12 = x[1];
+    // const double t21 = x[0];
+    // const double t12 = x[1];
 
     // first equation
     f[0] = (t21 * t21) - ((t11 * t11 * 0.5) + (t11 * t12) + (t11 * t13) - (0.5 * t13 * t13));
 
     // second equation
-    f[1] = (V11 * t12) + (0.5 * a11 * t12 * t12) + (a11 * t12 * t13) + (J * t21 * t21 * t21) - c;
+    f[1] = (v11 * t12) + (0.5 * a11 * t12 * t12) + (a11 * t12 * t13) + (Jerk * t21 * t21 * t21) - c;
 }
 
 // Solve 2x2 linear system directly (optimized for small system)
-void Profiler::computeJacobian2(const double x[2], double J[2][2],
-                             double t11, double t13, double a11, double V11, double J_param)
+void Profiler::computeJacobian2(double J[2][2])
 {
-    const double t21 = x[0];
-    const double t12 = x[1];
+    // const double t21 = x[0];
+    // const double t12 = x[1];
 
     // Partial derivatives for first equation
     J[0][0] = 2.0f;  // df1/dt21
     J[0][1] = -1.0f; // df1/dt12
 
     // Partial derivatives for second equation
-    J[1][0] = 3.0f * J_param * t21 * t21;         // df2/dt21
-    J[1][1] = 2.0f * a11 * t12 + V11 + a11 * t13; // df2/dt12
+    J[1][0] = 3.0f * Jerk * t21 * t21;         // df2/dt21
+    J[1][1] = 2.0f * a11 * t12 + v11 + a11 * t13; // df2/dt12
 }
 
 // Optimized Newton-Raphson method for 2D system
-std::vector<double> Profiler::newtonRaphson2(double t11, double t13, double a11, double V11,
-                                   double J, double c, double t21_initial,
-                                   double t12_initial, double tol,
+bool Profiler::newtonRaphson2(double c, double tol,
                                    int max_iter)
 {
-    double x[2] = {t21_initial, t12_initial};
     double f[2];
     double J_mat[2][2];
     double dx[2];
@@ -156,17 +136,17 @@ std::vector<double> Profiler::newtonRaphson2(double t11, double t13, double a11,
 
     for (int iter = 0; iter < max_iter; ++iter)
     {
-        computeSystem2(x, f, t11, t13, a11, V11, J, c);
+        computeSystem2(f, c);
 
         // Check for convergence using L2 norm
         const double norm = f[0] * f[0] + f[1] * f[1];
         if (norm < tol * tol)
         { // Compare squared norm to squared tolerance
-            return {x[0], x[1]};
+            return true;
         }
 
         // Compute Jacobian
-        computeJacobian2(x, J_mat, t11, t13, a11, V11, J);
+        computeJacobian2(J_mat);
 
         // Solve J*dx = -f
         minus_f[0] = -f[0];
@@ -174,11 +154,12 @@ std::vector<double> Profiler::newtonRaphson2(double t11, double t13, double a11,
         solve2x2System(J_mat, minus_f, dx);
 
         // Update solution
-        x[0] += dx[0];
-        x[1] += dx[1];
+        t21 += dx[0];
+        t12 += dx[1];
     }
+    return false;
 
-    return {x[0], x[1]};
+    // return {x[0], x[1]};
 }
 
 
@@ -187,17 +168,16 @@ void Profiler::computeSystem3(double f[2],
                               double t21, double J, double Vcurr,
                               double acurr, double c)
 {
-    // t13 doğrudan class içi t11 ile hesaplanır
     double t13 = t11 + (acurr / J);
 
-    // First equation (orijinal denklem):
+    // First equation:
     // J*t21^2 + J*t21*t22 = Vcurr + acurr*t11 + 0.5*J*t11^2 + acurr*t13 + 0.5*J*t13^2 + 0.5*acurr^2/J
     f[0] = (J * t21 * t21 + J * t21 * t22)
          - (Vcurr + acurr * t11 + 0.5 * J * t11 * t11
             + acurr * t13 + 0.5 * J * t13 * t13
             + 0.5 * (acurr * acurr / J));
     
-    // Second equation (orijinal denklem):
+    // Second equation:
     // c = (acurr^2*t11/J) + 2.5*acurr*t11^2 + Vcurr*t11 + 1.33334*J*t11^3 +
     //      1.5*J*t21^2*t22 + 0.5*J*t21*t22^2
     f[1] = (acurr * acurr * t11 / J)
@@ -215,7 +195,7 @@ void Profiler::computeJacobian3(double J_mat[2][2],
 {
     // ----------- df1/dt11 -----------
     // f1 = J*t21^2 + J*t21*t22 - [Vcurr + acurr*t11 + 0.5*J*t11^2 + acurr*t13 + 0.5*J*t13^2 + 0.5*acurr^2/J]
-    // t13 = t11 + acurr/J olduğundan dt13/dt11 = 1
+    // t13 = t11 + acurr/J => dt13/dt11 = 1
     // df1/dt11 = -acurr - J*t11 - acurr - J*t13
     //          = -2*acurr - J*t11 - J*(t11 + acurr/J)
     //          = -2*acurr - J*t11 - J*t11 - acurr
@@ -347,21 +327,24 @@ void Profiler::CalculateShorterProfile()
             a11 = (CurrentAcceleration +
                                             (Jerk * t11));
 
+            a21 = -(Jerk * t21);
+            
             double c2 = (TargetDistance) -
                         x11 - (v11 * t13) -
                         (0.5 * a11 * std::pow(t13, 2)) +
                         (0.1666667 * Jerk * std::pow(t13, 3)) -
                         (Jerk * std::pow(t21, 3));
 
-            a21 = -(Jerk * t21);
 
-            std::vector<double> result = newtonRaphson1(
-                t11, t13, t21,
-                a11, v11, Jerk,
-                c2, t22, t12);
+            bool result = newtonRaphson1(c2);
 
-            t22 = result[0];
-            t12 = result[1];
+            if (!result)
+            {
+                std::cout << "Newton-Raphson 1 did not converge!" << std::endl;
+            }
+
+            // t22 = result[0];
+            // t12 = result[1];
 
             x12 = (v11 * t12) + (0.5 * a11 * std::pow(t12, 2));
             v12 = (v11 + (a11 * t12));
@@ -422,12 +405,10 @@ void Profiler::CalculateShorterProfile()
                             (0.5 * a11 * std::pow(t13, 2)) +
                             (0.1666667 * Jerk * std::pow(t13, 3));
 
-                std::vector<double> result = newtonRaphson2(t11, t13,
-                                                            a11, v11, Jerk,
-                                                            c3, t21, t12);
+                bool result = newtonRaphson2(c3);
 
-                t21 = result[0];
-                t12 = result[1];
+                // t21 = result[0];
+                // t12 = result[1];
                 t23 = t21;
                 t22 = 0.0;
 
@@ -568,12 +549,12 @@ void Profiler::CalculateShorterProfile()
 
             a21 = -(Jerk * t21);
 
-            std::vector<double> result = newtonRaphson1(t11, t13, t21,
-                                                        a11, v11, Jerk, c2,
-                                                        t22, t12);
+            bool result = newtonRaphson1(c2);
 
-            t22 = result[0];
-            t12 = result[1];
+            if (!result)
+            {
+                std::cout << "Newton-Raphson 1 did not converge!" << std::endl;
+            }
 
             x12 = (v11 * t12) + (0.5 * a11 * std::pow(t12, 2));
             v12 = (v11 + (a11 * t12));
@@ -805,12 +786,15 @@ void Profiler::CalculateShorterProfile()
 
             a21 = -(Jerk * t21);
 
-            std::vector<double> result = newtonRaphson1(t11, t13, t21,
-                                                        a11, v11, Jerk, c2,
-                                                        t22, t12);
+            bool result = newtonRaphson1(c2);
 
-            t22 = result[0];
-            t12 = result[1];
+            if (!result)
+            {
+                std::cout << "Newton-Raphson 1 did not converge!" << std::endl;
+            }
+
+            // t22 = result[0];
+            // t12 = result[1];
 
             x12 = (v11 * t12) + (0.5 * a11 * std::pow(t12, 2));
             v12 = (v11 + (a11 * t12));

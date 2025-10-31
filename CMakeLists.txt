@@ -6,15 +6,19 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# ---- Build type (default Release) ----
+# ---- Build type ----
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
 endif()
 
+# ---- Detect build target ----
+message(STATUS "System name: ${CMAKE_SYSTEM_NAME}")
+message(STATUS "C++ compiler: ${CMAKE_CXX_COMPILER_ID}")
+
 # ---- OpenGL ----
 find_package(OpenGL REQUIRED)
 
-# ---- FetchContent for third-party deps ----
+# ---- FetchContent ----
 include(FetchContent)
 
 # glfw
@@ -31,7 +35,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glfw)
 
-# imgui (OpenGL3 + GLFW backend)
+# imgui
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
@@ -47,7 +51,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(implot)
 
-# ---- imgui library (with OpenGL3 backend) ----
+# ---- imgui static lib ----
 set(IMGUI_DIR ${imgui_SOURCE_DIR})
 add_library(imgui STATIC
     ${IMGUI_DIR}/imgui.cpp
@@ -55,7 +59,7 @@ add_library(imgui STATIC
     ${IMGUI_DIR}/imgui_tables.cpp
     ${IMGUI_DIR}/imgui_widgets.cpp
     ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
-    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp  # OpenGL3 backend
+    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
 )
 target_include_directories(imgui PUBLIC
     ${IMGUI_DIR}
@@ -63,7 +67,7 @@ target_include_directories(imgui PUBLIC
 )
 target_link_libraries(imgui PUBLIC glfw OpenGL::GL)
 
-# ---- implot library ----
+# ---- implot static lib ----
 set(IMPLOT_DIR ${implot_SOURCE_DIR})
 add_library(implot STATIC
     ${IMPLOT_DIR}/implot.cpp
@@ -88,30 +92,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     implot
 )
 
-# Add OpenGL3 definitions
-target_compile_definitions(${PROJECT_NAME} PRIVATE 
-    IMGUI_IMPL_OPENGL_LOADER_GL3W
-)
+# ---- Compile definitions ----
+target_compile_definitions(${PROJECT_NAME} PRIVATE IMGUI_IMPL_OPENGL_LOADER_GL3W)
 
-# macOS frameworks for GLFW and OpenGL
-if(APPLE)
-    find_library(COCOA_LIBRARY Cocoa)
-    find_library(IOKIT_LIBRARY IOKit)
-    find_library(COREVIDEO_LIBRARY CoreVideo)
-    target_link_libraries(${PROJECT_NAME} PRIVATE
-        ${COCOA_LIBRARY}
-        ${IOKIT_LIBRARY}
-        ${COREVIDEO_LIBRARY}
-    )
-endif()
-
-# Linux X11 libraries
-if(UNIX AND NOT APPLE)
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${X11_LIBRARIES})
-    target_include_directories(${PROJECT_NAME} PRIVATE ${X11_INCLUDE_DIRS})
-endif()
-
-# Windows specific settings
-if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE opengl32)
-endif()

@@ -68,36 +68,32 @@ public:
     void computeSystem3(double f[2],
                               double t21, double J, double Vcurr,
                               double acurr, double c);
-
-
-    std::vector<double> newtonRaphson1(double t11, double t13, double t21,
-                                       double a11, double v11, double Jerk, double c2,
-                                       double t22_init, double t12_init, double tol = 1e-6,
-                                       int max_iter = 100);
-    
-    std::vector<double> newtonRaphson2(double t11, double t13, double a11, double V11,
-                                   double J, double c, double t21_initial,
-                                   double t12_initial, double tol = 1e-6,
-                                   int max_iter = 100);
-                                   
+       
 
     bool solveCubic(double a, double b, double c, double d,
                     double& root1, double& root2, double& root3);
+                    
     bool solveQuadratic(double a, double b, double c,
                         double& root1, double& root2);
+
     void solve2x2System(const double A[2][2], const double b[2], double x[2]);
-    void computeSystem1(const double x[2], double f[2],
-                        double t11, double t13, double t21,
-                        double a11, double V11, double J, double c);
-    void computeJacobian1(const double x[2], double J_mat[2][2],
-                          double t11, double t21,
-                          double a11, double V11, double J, double t13);
-    void computeSystem2(const double x[2], double f[2],
-                        double t11, double t13,
-                        double a11, double V11, double J, double c);
-    void computeJacobian2(const double x[2], double J[2][2],
-                          double t11, double t13,
-                          double a11, double V11, double J_param);
+
+
+
+    void computeSystem1(double f[2], double c);
+
+    void computeJacobian1(double J_mat[2][2]);
+
+    bool newtonRaphson1(double c, double tol = 1e-6,
+                                       int max_iter = 100);         
+                                       
+                                       
+    void computeSystem2(double f[2], double c);
+    void computeJacobian2(double J[2][2]);
+
+    bool newtonRaphson2(double c, double tol = 1e-6,
+                                   int max_iter = 100);
+
 
 private:
     void CalculateShorterProfile();
